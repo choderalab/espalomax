@@ -9,7 +9,7 @@ espalomax: **E**xtensible **S**urrogate **P**otenti**al** **O**ptimized by **M**
 
 Source code for [Wang Y, Fass J, and Chodera JD "End-to-End Differentiable Construction of Molecular Mechanics Force Fields."](https://arxiv.org/abs/2010.01196)
 
-![abstract](docs/_static/espaloma_abstract_v2-2.png)
+![abstract](https://github.com/choderalab/espaloma/blob/master/docs/_static/espaloma_abstract_v2-2.png?raw=true)
 
 #
 Documentation: https://espaloma.wangyq.net/
