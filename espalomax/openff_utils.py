@@ -46,7 +46,7 @@ def get_improper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
                 idx.append(other_atoms[(i+j)%3])
             idx_permuts.append(tuple(idx))
 
-    improper_torsion_idxs = jnp.array(idx_permuts)
+    improper_torsion_idxs = jnp.array(idx_permuts, dtype=jnp.int32)
     return improper_torsion_idxs
 
 def get_nonbonded_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -56,7 +56,7 @@ def get_nonbonded_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
 
     nonbonded_idxs = jnp.stack(
         jnp.where(
-            jnp.equal(a_ + a_ @ a_ + a_ @ a_ @ a_, 0.0)
+            jnp.equal(a_ + a_ @ a_ + a_ @ a_ @ a_, 0.0),
         ),
         axis=-1,
     )

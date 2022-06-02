@@ -1,11 +1,30 @@
-from typing import NamedTuple
+from typing import NamedTuple, DefaultDict
 from openff.toolkit.topology import Molecule
 from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
 
 from typing import DefaultDict
-Heterograph = DefaultDict[str, DefaultDict[str, jnp.ndarray]]
+
+class CloneableDefaultDict(DefaultDict):
+    def clone(self):
+        new = self.__class__()
+        for key, value in self.items():
+            if isinstance(key, jnp.ndarray):
+                value = value + 0
+            new[key] = value
+        return new
+
+class Heterograph(DefaultDict):
+    def __init__(self, *args, **kwargs):
+        super(Heterograph, self).__init__(*args, **kwargs)
+        self.default_factory = lambda: CloneableDefaultDict(lambda: None)
+
+    def clone(self):
+        new = self.__class__()
+        for key, value in self.items():
+            new[key] = value.clone()
+        return new
 
 class Graph(NamedTuple):
     homograph: GraphsTuple
@@ -26,6 +45,8 @@ class Graph(NamedTuple):
             receivers.append(bond.atom2_index)
             senders.append(bond.atom2_index)
             receivers.append(bond.atom1_index)
+        senders = jnp.array(senders)
+        receivers = jnp.array(receivers)
 
         # count
         n_node = len(nodes)
@@ -52,7 +73,7 @@ class Graph(NamedTuple):
             get_onefour_idxs_from_molecule,
         )
 
-        heterograph = DefaultDict(lambda: DefaultDict(lambda: None))
+        heterograph = Heterograph()
         heterograph['bond']['idxs'] =\
             get_bond_idxs_from_molecule(molecule)
         heterograph['angle']['idxs'] =\
@@ -75,3 +96,8 @@ class Graph(NamedTuple):
         return cls(
             homograph=homograph, heterograph=heterograph,
         )
+
+    @classmethod
+    def from_smiles(cls, smiles: str) -> NamedTuple:
+        molecule = Molecule.from_smiles(smiles)
+        return cls.from_openff_molecule(molecule)
