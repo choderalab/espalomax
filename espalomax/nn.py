@@ -104,11 +104,10 @@ class JanossyPooling(nn.Module):
                     nn.Dense(dimension),
                 )
 
-    def __call__(self, heterograph: Heterograph):
-        heterograph = heterograph.clone()
-        _h = heterograph.pop('h')
+    def __call__(self, heterograph: Heterograph, nodes: jnp.ndarray):
+        parameters = Heterograph()
         for out_feature in self.out_features.keys():
-            h = _h[heterograph[out_feature]['idxs']]
+            h = nodes[heterograph[out_feature]['idxs']]
             layer = getattr(self, "d_%s" % out_feature)
             if out_feature != "improper": # mirror symmetry
                 h = layer(h.reshape(*h.shape[:-2], -1))\
@@ -128,8 +127,8 @@ class JanossyPooling(nn.Module):
                     h = jnp.array([], dtype=jnp.float32)
             for parameter in self.out_features[out_feature]:
                 layer = getattr(self, "d_%s_%s" % (out_feature, parameter))
-                heterograph[out_feature][parameter] = layer(h)
-        return heterograph
+                parameters[out_feature][parameter] = layer(h)
+        return parameters
 
 class Parametrization(nn.Module):
     representation: Callable
@@ -138,7 +137,5 @@ class Parametrization(nn.Module):
     def __call__(self, graph):
         homograph, heterograph = graph.homograph, graph.heterograph
         homograph = self.representation(homograph)
-        heterograph['h'] = homograph.nodes
-        heterograph = self.janossy_pooling(heterograph)
-        graph = Graph(homograph=homograph, heterograph=heterograph)
-        return graph
+        parameters = self.janossy_pooling(heterograph, homograph.nodes)
+        return parameters

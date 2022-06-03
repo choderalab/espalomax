@@ -16,9 +16,8 @@ def test_janossy():
     graph = esp.Graph.from_smiles("C=O")
     heterograph = graph.heterograph
     h = jnp.zeros((5, 8))
-    heterograph['h'] = h
     model = esp.nn.JanossyPooling(8, 3)
-    params = model.init(jax.random.PRNGKey(2666), heterograph)
+    params = model.init(jax.random.PRNGKey(2666), heterograph, h)
 
 def test_parametrization():
     import jax
@@ -29,4 +28,6 @@ def test_parametrization():
         representation=esp.nn.GraphAttentionNetwork(8, 3),
         janossy_pooling=esp.nn.JanossyPooling(8, 3),
     )
-    params = model.init(jax.random.PRNGKey(2666), graph)
+    nn_params = model.init(jax.random.PRNGKey(2666), graph)
+    ff_params = model.apply(nn_params, graph)
+    print(ff_params)

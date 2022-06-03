@@ -6,25 +6,10 @@ import jax.numpy as jnp
 
 from typing import DefaultDict
 
-class CloneableDefaultDict(DefaultDict):
-    def clone(self):
-        new = self.__class__()
-        for key, value in self.items():
-            if isinstance(key, jnp.ndarray):
-                value = value + 0
-            new[key] = value
-        return new
-
 class Heterograph(DefaultDict):
     def __init__(self, *args, **kwargs):
         super(Heterograph, self).__init__(*args, **kwargs)
-        self.default_factory = lambda: CloneableDefaultDict(lambda: None)
-
-    def clone(self):
-        new = self.__class__()
-        for key, value in self.items():
-            new[key] = value.clone()
-        return new
+        self.default_factory = lambda: DefaultDict(lambda: None)
 
 class Graph(NamedTuple):
     homograph: GraphsTuple
