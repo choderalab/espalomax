@@ -13,7 +13,7 @@ def test_janossy():
     import jax
     import jax.numpy as jnp
     import espalomax as esp
-    graph = esp.Graph.from_smiles("C=O")
+    graph = esp.Graph.from_smiles("CC=O")
     heterograph = graph.heterograph
     h = jnp.zeros((5, 8))
     model = esp.nn.JanossyPooling(8, 3)
@@ -23,7 +23,7 @@ def test_parametrization():
     import jax
     import jax.numpy as jnp
     import espalomax as esp
-    graph = esp.Graph.from_smiles("C=O")
+    graph = esp.Graph.from_smiles("CC=O")
     model = esp.nn.Parametrization(
         representation=esp.nn.GraphAttentionNetwork(8, 3),
         janossy_pooling=esp.nn.JanossyPooling(8, 3),

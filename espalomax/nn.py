@@ -8,7 +8,7 @@ from jraph import GAT
 
 IMPROPER_PERMUTATIONS = [(0, 1, 2, 3), (0, 2, 3, 1), (0, 3, 1, 2)]
 JANOSSY_POOLING_PARAMETERS = {
-    "bonds": {"coefficients": 2},
+    "bond": {"coefficients": 2},
     "angle": {"coefficients": 2},
     "proper": {"k": 6},
     "improper": {"k": 6},
@@ -113,7 +113,7 @@ class JanossyPooling(nn.Module):
                 h = layer(h.reshape(*h.shape[:-2], -1))\
                     + layer(jnp.flip(h, -2).reshape(*h.shape[:-2], -1))
             else:
-                if len(heterograph['improper']['idxs'] > 0):
+                if heterograph['improper']['idxs'] is not None:
                     hs = [
                         layer(
                             h[..., jnp.array(permutation), :]

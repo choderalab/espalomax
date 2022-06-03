@@ -8,11 +8,23 @@ ANGLE_PHASES = (0.0, math.pi)
 
 class Geometry(object):
     @staticmethod
-    def get_geometry_bond(heterograph, coordinates):
+    def get_geometry_distance(heterograph, coordinates):
         x0 = coordinates[heterograph['bond']['idxs'][..., 0]]
         x1 = coordinates[heterograph['bond']['idxs'][..., 1]]
         length = ((x0 - x1) ** 2).sum(axis=-1) ** 0.5
         return length
+
+    @staticmethod
+    def get_geometry_bond(*args, **kwargs):
+        return Geometry.get_geometry_distance(*args, **kwargs)
+
+    @staticmethod
+    def get_geometry_nonbonded(*args, **kwargs):
+        return Geometry.get_geometry_distance(*args, **kwargs)
+
+    @staticmethod
+    def get_geometry_onefour(*args, **kwargs):
+        return Geometry.get_geometry_distance(*args, **kwargs)
 
     @staticmethod
     def get_geometry_angle(heterograph, coordinates):
@@ -52,24 +64,27 @@ class Geometry(object):
 
     @staticmethod
     def get_geometry_proper(heterograph, coordinates):
-        return self.get_geometry_torsion(
-            heterograph, coordinates, torsion="proper"
+        return Geometry.get_geometry_torsion(
+            heterograph, coordinates, torsion_type="proper"
         )
 
     @staticmethod
     def get_geometry_improper(heterograph, coordinates):
-        return self.get_geometry_torsion(
+        return Geometry.get_geometry_torsion(
             heterograph, coordinates, torsion_type="improper"
         )
 
     @staticmethod
-    def __call__(heterograph, coordinates):
+    def get_geometry(heterograph, coordinates):
         geometry = Heterograph()
         for term in heterograph.keys():
-            geometry[term]['x'] = getattr(self, "get_geometry_%s" % term)(
+            geometry[term]['x'] = getattr(Geometry, "get_geometry_%s" % term)(
                 heterograph, coordinates,
             )
         return geometry
+
+def get_geometry(heterograph, coordinates):
+    return Geometry.get_geometry(heterograph, coordinates)
 
 class Energy(object):
     @staticmethod
@@ -97,11 +112,11 @@ class Energy(object):
 
     @staticmethod
     def get_energy_bond(x, coefficients):
-        return self.get_energy_linear_mixture(x, coefficients, BOND_PHASES)
+        return Energy.get_energy_linear_mixture(x, coefficients, BOND_PHASES)
 
     @staticmethod
     def get_energy_angle(x, coefficients):
-        return self.get_energy_linear_mixture(x, coefficients, ANGLE_PHASES)
+        return Energy.get_energy_linear_mixture(x, coefficients, ANGLE_PHASES)
 
     @staticmethod
     def get_energy_torsion(
@@ -118,25 +133,34 @@ class Energy(object):
         ).sum(axis=-1)
         return energy
 
-    get_energy_improper = get_enery_proper = get_energy_torsions
+    @staticmethod
+    def get_energy_improper(*args, **kwargs):
+        return Energy.get_energy_torsion(*args, **kwargs)
 
     @staticmethod
-    def __call__(geometry, parameters):
+    def get_energy_proper(*args, **kwargs):
+        return Energy.get_energy_torsion(*args, **kwargs)
+
+    @staticmethod
+    def get_energy(parameters, geometry):
         energy = Heterograph()
-        energy['bond']['u'] = get_energy_bond(
+        energy['bond']['u'] = Energy.get_energy_bond(
             geometry['bond']['x'], parameters['bond']['coefficients'],
         )
 
-        energy['angle']['u'] = get_energy_angle(
+        energy['angle']['u'] = Energy.get_energy_angle(
             geometry['angle']['x'], parameters['angle']['coefficients'],
         )
 
-        energy['proper']['u'] = get_enery_proper(
-            geometry['proper']['x'], parameters['proper']['coefficients'],
+        energy['proper']['u'] = Energy.get_energy_proper(
+            geometry['proper']['x'], parameters['proper']['k'],
         )
 
-        energy['improper']['u'] = get_energy_improper(
-            geometry['improper']['x'], parameters['improper']['coefficients'],
+        energy['improper']['u'] = Energy.get_energy_improper(
+            geometry['improper']['x'], parameters['improper']['k'],
         )
 
         return energy
+
+def get_energy(parameters, geometry):
+    return Energy.get_energy(parameters, geometry)

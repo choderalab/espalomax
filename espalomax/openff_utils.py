@@ -28,6 +28,7 @@ def get_proper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
             ]
         )
     )
+    return proper_torsion_idxs
 
 def get_improper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
     improper_smarts = '[*:2]~[X3:1](~[*:3])~[*:4]'

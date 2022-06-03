@@ -3,8 +3,8 @@ from openff.toolkit.topology import Molecule
 from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
-
-from typing import DefaultDict
+from jax.tree_util import register_pytree_node_class
+from typing import Dict, DefaultDict
 
 class Heterograph(DefaultDict):
     def __init__(self, *args, **kwargs):
@@ -12,6 +12,28 @@ class Heterograph(DefaultDict):
         self.default_factory = lambda: DefaultDict(lambda: None)
 
 class Graph(NamedTuple):
+    """An espaloma graph---a homograph that stores the node topology and
+    a heterograph that stores higher-order node topology.
+
+    Attributes
+    ----------
+    homograph : jraph.GraphsTuple
+        Node topology.
+    heterograph : Heterograph
+        Higher-order node topology
+
+    Methods
+    -------
+    homograph_from_openff_molecule(molecule)
+        Construct a homograph from OpenFF Molecule.
+    heterograph_from_openff_molecule(molecule)
+        Construct a heterograph from OpenFF Molecule.
+    from_openff_molecule(molecule)
+        Construct a graph (with homo- and heterograph) from OpenFF Molecule.
+    from_smiles(str)
+        Construct a graph (with homo- and heterograph) from SMILES string.
+
+    """
     homograph: GraphsTuple
     heterograph: Heterograph
 

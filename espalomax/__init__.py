@@ -1,2 +1,2 @@
-from . import graph, nn
+from . import graph, nn, mm
 from .graph import Graph
