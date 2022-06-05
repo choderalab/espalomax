@@ -32,7 +32,7 @@ def test_get_d_energy_d_parameter():
 
     def get_energy(nn_params):
         ff_params = model.apply(nn_params, graph)
-        energy = esp.mm.get_energy(ff_params, geometry)
+        energy = esp.mm.sum_energy(esp.mm.get_energy(ff_params, geometry))
         return energy
 
     d_energy_d_params = jax.grad(get_energy)(nn_params)

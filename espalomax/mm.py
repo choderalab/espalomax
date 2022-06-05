@@ -1,14 +1,22 @@
 import jax
 import jax.numpy as jnp
 from .graph import Heterograph
+from typing import Tuple
 
 import math
 BOND_PHASES = (1.5, 6.0)
 ANGLE_PHASES = (0.0, math.pi)
 
-class Geometry(object):
+from functools import partial
+from collections import defaultdict
+Energy = partial(defaultdict, lambda: None)
+Geometry = partial(defaultdict, lambda: None)
+
+class GetGeometry(object):
     @staticmethod
-    def get_geometry_distance(heterograph, coordinates):
+    def get_geometry_distance(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+        ) -> jnp.ndarray:
         x0 = coordinates[heterograph['bond']['idxs'][..., 0]]
         x1 = coordinates[heterograph['bond']['idxs'][..., 1]]
         length = ((x0 - x1) ** 2).sum(axis=-1) ** 0.5
@@ -16,18 +24,20 @@ class Geometry(object):
 
     @staticmethod
     def get_geometry_bond(*args, **kwargs):
-        return Geometry.get_geometry_distance(*args, **kwargs)
+        return GetGeometry.get_geometry_distance(*args, **kwargs)
 
     @staticmethod
     def get_geometry_nonbonded(*args, **kwargs):
-        return Geometry.get_geometry_distance(*args, **kwargs)
+        return GetGeometry.get_geometry_distance(*args, **kwargs)
 
     @staticmethod
     def get_geometry_onefour(*args, **kwargs):
-        return Geometry.get_geometry_distance(*args, **kwargs)
+        return GetGeometry.get_geometry_distance(*args, **kwargs)
 
     @staticmethod
-    def get_geometry_angle(heterograph, coordinates):
+    def get_geometry_angle(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+        ) -> jnp.ndarray:
         x0 = coordinates[heterograph['angle']['idxs'][..., 0]]
         x1 = coordinates[heterograph['angle']['idxs'][..., 1]]
         x2 = coordinates[heterograph['angle']['idxs'][..., 2]]
@@ -40,7 +50,11 @@ class Geometry(object):
         return angle
 
     @staticmethod
-    def get_geometry_torsion(heterograph, coordinates, torsion_type="proper"):
+    def get_geometry_torsion(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+            torsion_type: str="proper"
+        ) -> jnp.ndarray:
+
         x0 = coordinates[heterograph[torsion_type]['idxs'][..., 0]]
         x1 = coordinates[heterograph[torsion_type]['idxs'][..., 1]]
         x2 = coordinates[heterograph[torsion_type]['idxs'][..., 2]]
@@ -63,32 +77,42 @@ class Geometry(object):
         return theta
 
     @staticmethod
-    def get_geometry_proper(heterograph, coordinates):
-        return Geometry.get_geometry_torsion(
+    def get_geometry_proper(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+        ) -> jnp.ndarray:
+        return GetGeometry.get_geometry_torsion(
             heterograph, coordinates, torsion_type="proper"
         )
 
     @staticmethod
-    def get_geometry_improper(heterograph, coordinates):
-        return Geometry.get_geometry_torsion(
+    def get_geometry_improper(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+        ) -> jnp.ndarray:
+        return GetGeometry.get_geometry_torsion(
             heterograph, coordinates, torsion_type="improper"
         )
 
     @staticmethod
-    def get_geometry(heterograph, coordinates):
-        geometry = Heterograph()
+    def get_geometry(
+            heterograph: Heterograph, coordinates: jnp.ndarray,
+        ) -> Geometry:
+        geometry = Geometry()
         for term in heterograph.keys():
-            geometry[term]['x'] = getattr(Geometry, "get_geometry_%s" % term)(
+            geometry[term] = getattr(GetGeometry, "get_geometry_%s" % term)(
                 heterograph, coordinates,
             )
         return geometry
 
-def get_geometry(heterograph, coordinates):
-    return Geometry.get_geometry(heterograph, coordinates)
+def get_geometry(
+        heterograph: Heterograph, coordinates: jnp.ndarray,
+    ) -> Geometry:
+    return GetGeometry.get_geometry(heterograph, coordinates)
 
-class Energy(object):
+class GetEnergy(object):
     @staticmethod
-    def get_energy_linear_mixture(x, coefficients, phases):
+    def get_energy_linear_mixture(
+            x: jnp.ndarray, coefficients: jnp.ndarray, phases: Tuple,
+        ) -> jnp.ndarray:
         # partition the dimensions
         # (, )
         b1 = phases[0]
@@ -112,16 +136,17 @@ class Energy(object):
 
     @staticmethod
     def get_energy_bond(x, coefficients):
-        return Energy.get_energy_linear_mixture(x, coefficients, BOND_PHASES)
+        return GetEnergy.get_energy_linear_mixture(x, coefficients, BOND_PHASES)
 
     @staticmethod
     def get_energy_angle(x, coefficients):
-        return Energy.get_energy_linear_mixture(x, coefficients, ANGLE_PHASES)
+        return GetEnergy.get_energy_linear_mixture(x, coefficients, ANGLE_PHASES)
 
     @staticmethod
     def get_energy_torsion(
-        x, k,
-        periodicity=jnp.arange(1, 7), phases=jnp.zeros(6),
+        x: jnp.ndarray, k: jnp.ndarray,
+        periodicity: jnp.ndarray=jnp.arange(1, 7),
+        phases: jnp.ndarray=jnp.zeros(6),
     ):
         n_theta = jnp.expand_dims(x, -1) * periodicity
         n_theta_minus_phases = n_theta - phases
@@ -135,32 +160,39 @@ class Energy(object):
 
     @staticmethod
     def get_energy_improper(*args, **kwargs):
-        return Energy.get_energy_torsion(*args, **kwargs)
+        return GetEnergy.get_energy_torsion(*args, **kwargs)
 
     @staticmethod
     def get_energy_proper(*args, **kwargs):
-        return Energy.get_energy_torsion(*args, **kwargs)
+        return GetEnergy.get_energy_torsion(*args, **kwargs)
 
     @staticmethod
-    def get_energy(parameters, geometry):
-        energy = Heterograph()
-        energy['bond']['u'] = Energy.get_energy_bond(
-            geometry['bond']['x'], parameters['bond']['coefficients'],
+    def get_energy(
+            parameters: Heterograph, geometry: Geometry
+        ):
+        energy = Energy()
+        energy['bond'] = GetEnergy.get_energy_bond(
+            geometry['bond'], parameters['bond']['coefficients'],
         )
 
-        energy['angle']['u'] = Energy.get_energy_angle(
-            geometry['angle']['x'], parameters['angle']['coefficients'],
+        energy['angle'] = GetEnergy.get_energy_angle(
+            geometry['angle'], parameters['angle']['coefficients'],
         )
 
-        energy['proper']['u'] = Energy.get_energy_proper(
-            geometry['proper']['x'], parameters['proper']['k'],
+        energy['proper'] = GetEnergy.get_energy_proper(
+            geometry['proper'], parameters['proper']['k'],
         )
 
-        energy['improper']['u'] = Energy.get_energy_improper(
-            geometry['improper']['x'], parameters['improper']['k'],
+        energy['improper'] = GetEnergy.get_energy_improper(
+            geometry['improper'], parameters['improper']['k'],
         )
 
         return energy
 
 def get_energy(parameters, geometry):
-    return Energy.get_energy(parameters, geometry)
+    return GetEnergy.get_energy(parameters, geometry)
+
+def sum_energy(energy: Energy):
+    energy = jax.tree_util.tree_map(jnp.sum, energy)
+    energy = sum(energy.values())
+    return energy

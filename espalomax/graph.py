@@ -4,12 +4,11 @@ from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
-from typing import Dict, DefaultDict
+# from typing import Dict, DefaultDict
+from collections import defaultdict
+from functools import partial
 
-class Heterograph(DefaultDict):
-    def __init__(self, *args, **kwargs):
-        super(Heterograph, self).__init__(*args, **kwargs)
-        self.default_factory = lambda: DefaultDict(lambda: None)
+Heterograph = partial(defaultdict, lambda: defaultdict(lambda: None))
 
 class Graph(NamedTuple):
     """An espaloma graph---a homograph that stores the node topology and
