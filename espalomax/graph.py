@@ -38,6 +38,18 @@ class Graph(NamedTuple):
 
     @staticmethod
     def homograph_from_openff_molecule(molecule: Molecule) -> GraphsTuple:
+        """Create a homograph from OpenFF Molecule object.
+
+        Parameters
+        ----------
+        molecule : Molecule
+            Input molecule.
+
+        Returns
+        -------
+        GraphsTuple
+            The homograph.
+        """
         # get nodes
         nodes = [atom.atomic_number for atom in molecule.atoms]
         nodes = jnp.array(nodes)
@@ -70,6 +82,18 @@ class Graph(NamedTuple):
 
     @staticmethod
     def heterograph_from_openff_molecule(molecule: Molecule) -> Heterograph:
+        """Construct heterograph from an OpenFF molecule.
+
+        Parameters
+        ----------
+        molecule : Molecule
+            Input OpenFF molecule.
+
+        Returns
+        -------
+        Heterograph
+            The constructed heterograph.
+        """
         from .openff_utils import (
             get_bond_idxs_from_molecule,
             get_angle_idxs_from_molecule,
@@ -97,6 +121,18 @@ class Graph(NamedTuple):
 
     @classmethod
     def from_openff_molecule(cls, molecule: Molecule) -> NamedTuple:
+        """Construct Graph from OpenFF Molecule.
+
+        Parameters
+        ----------
+        molecule : Molecule
+            Input molecule.
+
+        Returns
+        -------
+        Graph
+            Espaloma graph.
+        """
         homograph = cls.homograph_from_openff_molecule(molecule)
         heterograph = cls.heterograph_from_openff_molecule(molecule)
         return cls(
@@ -105,5 +141,17 @@ class Graph(NamedTuple):
 
     @classmethod
     def from_smiles(cls, smiles: str) -> NamedTuple:
+        """Construct Graph from SMILES string.
+
+        Parameters
+        ----------
+        smiles : str
+            Input SMILES string.
+
+        Returns
+        -------
+        Graph
+            Resulting molecule.
+        """
         molecule = Molecule.from_smiles(smiles)
         return cls.from_openff_molecule(molecule)
