@@ -12,15 +12,19 @@ from collections import defaultdict
 Energy = partial(defaultdict, lambda: None)
 Geometry = partial(defaultdict, lambda: None)
 
+from jax_md.space import distance
+from jax_md.quantity import
+
 class GetGeometry(object):
     @staticmethod
     def get_geometry_distance(
             heterograph: Heterograph, coordinates: jnp.ndarray,
+            displacement: Callable,
         ) -> jnp.ndarray:
         x0 = coordinates[heterograph['bond']['idxs'][..., 0]]
         x1 = coordinates[heterograph['bond']['idxs'][..., 1]]
-        length = ((x0 - x1) ** 2).sum(axis=-1) ** 0.5
-        return length
+        delta_x = displacement(x0, x1)
+        return distance(delta_x)
 
     @staticmethod
     def get_geometry_bond(*args, **kwargs):
@@ -37,12 +41,16 @@ class GetGeometry(object):
     @staticmethod
     def get_geometry_angle(
             heterograph: Heterograph, coordinates: jnp.ndarray,
+            displacement: Callable,
         ) -> jnp.ndarray:
+
         x0 = coordinates[heterograph['angle']['idxs'][..., 0]]
         x1 = coordinates[heterograph['angle']['idxs'][..., 1]]
         x2 = coordinates[heterograph['angle']['idxs'][..., 2]]
-        left = x1 - x0
-        right = x1 - x2
+
+        left = displacement(x1, x0)
+        right = displacement(x1, x2)
+
         angle = jnp.arctan2(
             jnp.linalg.norm(jnp.cross(left, right), ord=2, axis=-1),
             jnp.sum(left * right, axis=-1),
@@ -52,7 +60,8 @@ class GetGeometry(object):
     @staticmethod
     def get_geometry_torsion(
             heterograph: Heterograph, coordinates: jnp.ndarray,
-            torsion_type: str="proper"
+            displacement: Callable,
+            torsion_type: str="proper",
         ) -> jnp.ndarray:
 
         x0 = coordinates[heterograph[torsion_type]['idxs'][..., 0]]
@@ -60,9 +69,9 @@ class GetGeometry(object):
         x2 = coordinates[heterograph[torsion_type]['idxs'][..., 2]]
         x3 = coordinates[heterograph[torsion_type]['idxs'][..., 3]]
 
-        r01 = x1 - x0
-        r21 = x1 - x2
-        r23 = x3 - x2
+        r01 = displacement(x1, x0)
+        r21 = displacement(x1, x2)
+        r23 = displacement(x3, x2)
 
         n1 = jnp.cross(r01, r21)
         n2 = jnp.cross(r21, r23)
