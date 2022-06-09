@@ -14,6 +14,10 @@ JANOSSY_POOLING_PARAMETERS = {
     "improper": {"k": 6},
 }
 
+import math
+BOND_PHASES = (1.5, 6.0)
+ANGLE_PHASES = (0.0, math.pi)
+
 class AttentionQueryFn(nn.Module):
     hidden_features: int
 
@@ -139,3 +143,57 @@ class Parametrization(nn.Module):
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
         return parameters
+
+
+def linear_mixture_to_original(coefficients, phases):
+    k1 = coefficients[..., 0]
+    k2 = coefficients[..., 1]
+    b1 = phases[0]
+    b2 = phases[1]
+
+    k = jnp.exp(k1) + jnp.exp(k2)
+    b = (k1 * b1 + k2 * b2) / (k + 1e-7)
+    return k, b
+
+def to_jaxmd_mm_energy_fn_parameters(parameters):
+    from jax_md.mm import (
+        MMEnergyFnParameters, HarmonicBondParameters,
+        PeriodicTorsionParameters,
+    )
+
+    k_r, r0 = linear_mixture_to_original(
+            parameters['bond']['coefficients'], BOND_PHASES
+    )
+
+    k_theta, theta0 = linear_mixture_to_original(
+            parameters['angle']['coefficients'], ANGLE_PHASES,
+    )
+
+    return MMEnergyFnParameters(
+        harmonic_bond_parameters=HarmonicBondParameters(
+            particles=parameters['bond']['idxs'].
+            k=k_r,
+            r0=r0,
+        ),
+        harmonic_angle_parameters=HarmonicAngleParameters(
+            particles=parameters['angle']['idxs'],
+            k=k_theta,
+            theata0=theta0,
+        ),
+        periodict_torsion_parameters=PeriodicTorsionParameters(
+            particles=jnp.concatenate(
+                [
+                    jnp.repeat(parameters["proper"]["idxs"], 6, 0),
+                    jnp.repeat(parameters["improper"]["idxs"], 6, 0),
+                ],
+            ),
+            k=jnp.concatenate(
+                [
+                    parameters["proper"]["idxs"].flatten(),
+                    parameters["improper"]["idxs"].flatten(),
+                ],
+            ),
+            periodicity=jnp.tile(jnp.arange(1, 7), len(parameters["idxs"])),
+            phase=0.0,
+        )
+    )

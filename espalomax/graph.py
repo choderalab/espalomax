@@ -4,7 +4,6 @@ from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
-# from typing import Dict, DefaultDict
 from collections import defaultdict
 from functools import partial
 
@@ -49,6 +48,7 @@ class Graph(NamedTuple):
         -------
         GraphsTuple
             The homograph.
+
         """
         # get nodes
         nodes = [atom.atomic_number for atom in molecule.atoms]
@@ -61,6 +61,7 @@ class Graph(NamedTuple):
         for bond in molecule.bonds:
             senders.append(bond.atom1_index)
             receivers.append(bond.atom2_index)
+            # ensure homograph symmetry
             senders.append(bond.atom2_index)
             receivers.append(bond.atom1_index)
         senders = jnp.array(senders)
@@ -93,6 +94,7 @@ class Graph(NamedTuple):
         -------
         Heterograph
             The constructed heterograph.
+
         """
         from .openff_utils import (
             get_bond_idxs_from_molecule,
@@ -132,6 +134,21 @@ class Graph(NamedTuple):
         -------
         Graph
             Espaloma graph.
+
+        Examples
+        --------
+        >>> molecule = Molecule.from_smiles("C")
+        >>> graph = Graph.from_openff_molecule(molecule)
+        >>> graph.homograph.n_node
+        5
+        >>> graph.homograph.n_edge
+        8
+
+        >>> len(graph.heterograph["bond"]["idxs"])
+        4
+        >>> len(graph.heterograph["angle"]["idxs"])
+        6
+
         """
         homograph = cls.homograph_from_openff_molecule(molecule)
         heterograph = cls.heterograph_from_openff_molecule(molecule)

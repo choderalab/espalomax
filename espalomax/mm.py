@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from .graph import Heterograph
-from typing import Tuple
+from typing import Tuple, Callable
 
 import math
 BOND_PHASES = (1.5, 6.0)
@@ -13,7 +13,6 @@ Energy = partial(defaultdict, lambda: None)
 Geometry = partial(defaultdict, lambda: None)
 
 from jax_md.space import distance
-from jax_md.quantity import
 
 class GetGeometry(object):
     @staticmethod
