@@ -172,3 +172,21 @@ class Graph(NamedTuple):
         """
         molecule = Molecule.from_smiles(smiles)
         return cls.from_openff_molecule(molecule)
+
+
+def batch(graphs):
+    homographs = jraph.batch([graph.homograph for graph in graphs])
+    offsets = homographs.n_nodes
+    heterographs = Heterograph()
+    for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
+        heterographs[term]["idxs"] = jnp.concatenate(
+            [
+                graph.heterograph[term]["idxs"] + offsets[idx]
+                for idx, graph in enumerate(graphs)
+            ],
+            axis=0
+        )
+
+        # for key in graphs[0].heterograph[term].keys():
+
+    return Graph(homograph=homographs, heterograph=heterographs)
