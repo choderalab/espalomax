@@ -3,7 +3,8 @@ import jax.numpy as jnp
 
 def get_bond_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
     bond_idxs = jnp.array(
-        [[bond.atom1_index, bond.atom2_index] for bond in molecule.bonds]
+        [[bond.atom1_index, bond.atom2_index] for bond in molecule.bonds],
+        dtype=jnp.int32,
     )
     return bond_idxs
 
@@ -14,7 +15,8 @@ def get_angle_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
                 tuple([atom.molecule_atom_index for atom in angle])
                 for angle in molecule.angles
             ]
-        )
+        ),
+        dtype=jnp.int32,
     )
 
     return angle_idxs
@@ -26,7 +28,8 @@ def get_proper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
                 tuple([atom.molecule_atom_index for atom in proper])
                 for proper in molecule.propers
             ]
-        )
+        ),
+        dtype=jnp.int32,
     )
     return proper_torsion_idxs
 

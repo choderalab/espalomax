@@ -112,12 +112,12 @@ class JanossyPooling(nn.Module):
         parameters = Heterograph()
         for out_feature in self.out_features.keys():
             h = nodes[heterograph[out_feature]['idxs']]
-            layer = getattr(self, "d_%s" % out_feature)
-            if out_feature != "improper": # mirror symmetry
-                h = layer(h.reshape(*h.shape[:-2], -1))\
-                    + layer(jnp.flip(h, -2).reshape(*h.shape[:-2], -1))
-            else:
-                if heterograph['improper']['idxs'] is not None:
+            if len(h) > 0:
+                layer = getattr(self, "d_%s" % out_feature)
+                if out_feature != "improper": # mirror symmetry
+                    h = layer(h.reshape(*h.shape[:-2], -1))\
+                        + layer(jnp.flip(h, -2).reshape(*h.shape[:-2], -1))
+                else:
                     hs = [
                         layer(
                             h[..., jnp.array(permutation), :]
@@ -127,11 +127,18 @@ class JanossyPooling(nn.Module):
                     ]
 
                     h = sum(hs)
-                else:
-                    h = jnp.array([], dtype=jnp.float32)
+            else:
+                h = jnp.array([], dtype=jnp.float32)
+
             for parameter in self.out_features[out_feature]:
                 layer = getattr(self, "d_%s_%s" % (out_feature, parameter))
-                parameters[out_feature][parameter] = layer(h)
+
+                if len(h) > 0:
+                    parameters[out_feature][parameter] = layer(h)
+                else:
+                    parameters[out_feature][parameter] = jnp.array([], dtype=jnp.float32)
+
+                parameters[out_feature]["idxs"] = heterograph[out_feature]["idxs"]
         return parameters
 
 class Parametrization(nn.Module):
@@ -155,45 +162,60 @@ def linear_mixture_to_original(coefficients, phases):
     b = (k1 * b1 + k2 * b2) / (k + 1e-7)
     return k, b
 
-def to_jaxmd_mm_energy_fn_parameters(parameters):
+def to_jaxmd_mm_energy_fn_parameters(parameters, to_replace=None):
     from jax_md.mm import (
-        MMEnergyFnParameters, HarmonicBondParameters,
+        MMEnergyFnParameters,
+        HarmonicBondParameters,
+        HarmonicAngleParameters,
         PeriodicTorsionParameters,
     )
 
-    k_r, r0 = linear_mixture_to_original(
+    epsilon_bond, length_bond = linear_mixture_to_original(
             parameters['bond']['coefficients'], BOND_PHASES
     )
 
-    k_theta, theta0 = linear_mixture_to_original(
+    harmonic_bond_parameters = HarmonicBondParameters(
+        particles=parameters['bond']['idxs'],
+        epsilon=epsilon_bond,
+        length=length_bond,
+    )
+
+    epsilon_angle, length_angle = linear_mixture_to_original(
             parameters['angle']['coefficients'], ANGLE_PHASES,
     )
 
-    return MMEnergyFnParameters(
-        harmonic_bond_parameters=HarmonicBondParameters(
-            particles=parameters['bond']['idxs'].
-            k=k_r,
-            r0=r0,
-        ),
-        harmonic_angle_parameters=HarmonicAngleParameters(
-            particles=parameters['angle']['idxs'],
-            k=k_theta,
-            theata0=theta0,
-        ),
-        periodict_torsion_parameters=PeriodicTorsionParameters(
-            particles=jnp.concatenate(
-                [
-                    jnp.repeat(parameters["proper"]["idxs"], 6, 0),
-                    jnp.repeat(parameters["improper"]["idxs"], 6, 0),
-                ],
-            ),
-            k=jnp.concatenate(
-                [
-                    parameters["proper"]["idxs"].flatten(),
-                    parameters["improper"]["idxs"].flatten(),
-                ],
-            ),
-            periodicity=jnp.tile(jnp.arange(1, 7), len(parameters["idxs"])),
-            phase=0.0,
-        )
+    harmonic_angle_parameters = HarmonicAngleParameters(
+        particles=parameters['angle']['idxs'],
+        epsilon=epsilon_angle,
+        length=length_angle,
     )
+
+    periodic_torsion_parameters = PeriodicTorsionParameters(
+        particles=jnp.concatenate(
+            [
+                jnp.repeat(parameters["proper"]["idxs"], 6, 0),
+                jnp.repeat(parameters["improper"]["idxs"], 6, 0),
+            ],
+        ),
+        amplitude=jnp.concatenate(
+            [
+                parameters["proper"]["idxs"].flatten(),
+                parameters["improper"]["idxs"].flatten(),
+            ],
+        ),
+        periodicity=jnp.tile(jnp.arange(1, 7), len(parameters["idxs"])),
+        phase=0.0,
+    )
+
+    if to_replace is None:
+        return MMEnergyFnParameters(
+            harmonic_bond_parameters=harmonic_bond_parameters,
+            harmonic_angle_parameters=harmonic_angle_parameters,
+            periodic_torsion_parameters=periodic_torsion_parameters,
+        )
+    else:
+        return to_replace._replace(
+            harmonic_bond_parameters=harmonic_bond_parameters,
+            harmonic_angle_parameters=harmonic_angle_parameters,
+            periodic_torsion_parameters=periodic_torsion_parameters,
+        )

@@ -3,11 +3,12 @@ from openff.toolkit.topology import Molecule
 from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class
 from collections import defaultdict
 from functools import partial
+import jraph
 
 Heterograph = partial(defaultdict, lambda: defaultdict(lambda: None))
+
 
 class Graph(NamedTuple):
     """An espaloma graph---a homograph that stores the node topology and
@@ -53,7 +54,7 @@ class Graph(NamedTuple):
         # get nodes
         nodes = [atom.atomic_number for atom in molecule.atoms]
         nodes = jnp.array(nodes)
-        nodes = jax.nn.one_hot(nodes, 118) # TODO: use more features
+        nodes = jax.nn.one_hot(nodes, 118)  # TODO: use more features
 
         # get bonds
         senders = []
@@ -61,6 +62,7 @@ class Graph(NamedTuple):
         for bond in molecule.bonds:
             senders.append(bond.atom1_index)
             receivers.append(bond.atom2_index)
+
             # ensure homograph symmetry
             senders.append(bond.atom2_index)
             receivers.append(bond.atom1_index)
@@ -173,6 +175,35 @@ class Graph(NamedTuple):
         molecule = Molecule.from_smiles(smiles)
         return cls.from_openff_molecule(molecule)
 
+def parameters_from_molecule(
+        molecule: Molecule,
+        base_forcefield: str = "openff_unconstrained-2.0.0.offxml",
+) -> NamedTuple:
+    """Get jax_md.mm.MMEnergyFnParameters from single molecule.
+
+    Parameters
+    ----------
+    molecule : Molecule
+        Input OpenFF molecule.
+    base_forcefield : str
+        Base force field for nonbonded terms and exceptions.
+
+    Returns
+    -------
+    jax_md.mm.MMEnergyFnParameters
+        Resulting parameters.
+    """
+    from openff.toolkit.typing.engines.smirnoff import ForceField
+    molecule.assign_partial_charges("mmff94")
+    forcefield = ForceField(base_forcefield)
+    system = forcefield.create_openmm_system(
+        molecule.to_topology(),
+        charge_from_molecules=[molecule],
+    )
+
+    from jax_md.mm_utils import parameters_from_openmm_system
+    parameters = parameters_from_openmm_system(system)
+    return parameters
 
 def batch(graphs):
     homographs = jraph.batch([graph.homograph for graph in graphs])
