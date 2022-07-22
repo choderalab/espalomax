@@ -9,7 +9,7 @@ def test_init_graph():
 def test_parameters_from_molecule():
     import espalomax as esp
     from openff.toolkit.topology import Molecule
-    molecule = Molecule.from_smiles("C")
+    molecule = Molecule.from_smiles("C=C")
     parameters = esp.graph.parameters_from_molecule(molecule)
     from jax_md.mm import check_parameters
     check_parameters(parameters)

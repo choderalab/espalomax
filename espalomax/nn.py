@@ -199,12 +199,19 @@ def to_jaxmd_mm_energy_fn_parameters(parameters, to_replace=None):
         ),
         amplitude=jnp.concatenate(
             [
-                parameters["proper"]["idxs"].flatten(),
-                parameters["improper"]["idxs"].flatten(),
+                parameters["proper"]["k"].flatten(),
+                parameters["improper"]["k"].flatten(),
             ],
         ),
-        periodicity=jnp.tile(jnp.arange(1, 7), len(parameters["idxs"])),
-        phase=0.0,
+        periodicity=jnp.tile(
+            jnp.arange(1, 7),
+            len(parameters["proper"]["idxs"]) \
+            + len(parameters["improper"]["idxs"])
+        ),
+        phase=jnp.zeros(
+            6 * len(parameters["proper"]["idxs"]) \
+            + 6 * len(parameters["improper"]["idxs"])
+        ),
     )
 
     if to_replace is None:
