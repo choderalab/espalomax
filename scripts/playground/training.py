@@ -33,10 +33,16 @@ def run():
         neighbor_kwargs={},
     )
 
-    u = energy_fn(
-        jax.random.normal(key=jax.random.PRNGKey(2666), shape=(6, 3)),
-        parameters=ff_params
-    )
+    def u_from_nn_params(nn_params):
+        ff_params = model.apply(nn_params, graph)
+        ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
+        return energy_fn(
+            jax.random.normal(key=jax.random.PRNGKey(2666), shape=(6, 3)),
+            parameters=ff_params,
+        )
+
+    du_dp = jax.grad(u_from_nn_params)
+    print(du_dp(nn_params))
 
 if __name__ == "__main__":
     run()

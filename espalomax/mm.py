@@ -1,206 +1,117 @@
-import jax
-import jax.numpy as jnp
-from .graph import Heterograph
-from typing import Tuple, Callable
+from jax_md.mm import *
 
-import math
-BOND_PHASES = (1.5, 6.0)
-ANGLE_PHASES = (0.0, math.pi)
+def mm_energy_components_fn(displacement_fn : DisplacementFn,
+                 parameters : MMEnergyFnParameters,
+                 space_shape : Union[space.free, space.periodic, space.periodic_general] = space.periodic,
+                 use_neighbor_list : Optional[bool] = True,
+                 box_size: Optional[Box] = 1.,
+                 use_multiplicative_isotropic_cutoff: Optional[bool]=True,
+                 use_dsf_coulomb: Optional[bool]=True,
+                 neighbor_kwargs: Optional[Dict[str, Any]]=None,
+                 multiplicative_isotropic_cutoff_kwargs: Optional[Dict[str, Any]]={},
+                 **unused_kwargs,
+                 ) -> Union[EnergyFn, partition.NeighborListFns]:
+  """
+  generator of a canonical molecular mechanics-like `EnergyFn`;
+  TODO :
+    - render `nonbonded_exception_parameters.particles` static (requires changing `custom_mask_fn` handler)
+    - retrieve standard nonbonded energy (already coded)
+    - retrieve nonbonded energy per particle
+    - render `.particles` parameters static (may affect jit compilation speeds)
+  Args:
+    displacement_fn: A `DisplacementFn`.
+    parameters: An `MMEnergyFnParameters` containing all of the parameters of the model;
+      While these are dynamic, `mm_energy_fn` does effectively make some of these static, namely the `particles` parameter
+    space_shape : A generalized `jax_md.space`
+    use_neighbor_list : whether to use a neighbor list for `NonbondedParameters`
+    box_size : size of box for `space.periodic` or `space.periodic_general`; omitted for `space.free`
+  Returns:
+    An `EnergyFn` taking positions R (an ndarray of shape [n_particles, 3]), parameters,
+      (optionally) a `NeighborList`, and optional kwargs
+    A `neighbor_fn` for allocating and updating a neighbor_list
+  Example (vacuum from `openmm`):
+  >>> pdb = app.PDBFile('alanine-dipeptide-explicit.pdb')
+  >>> ff = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+  >>> mmSystem = ff.createSystem(pdb.topology, nonbondedMethod=app.PME, constraints=None, rigidWater=False, removeCMMotion=False)
+  >>> model = Modeller(pdb.topology, pdb.positions)
+  >>> model.deleteWater()
+  >>> mmSystem = ff.createSystem(model.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False, removeCMMotion=False)
+  >>> context = openmm.Context(mmSystem, openmm.VerletIntegrator(1.*unit.femtoseconds))
+  >>> context.setPositions(model.getPositions())
+  >>> omm_state = context.getState(getEnergy=True, getPositions=True)
+  >>> positions = jnp.array(omm_state.getPositions(asNumpy=True).value_in_unit_system(unit.md_unit_system))
+  >>> energy = omm_state.getPotentialEnergy().value_in_unit_system(unit.md_unit_system)
+  >>> from jax_md import mm_utils
+  >>> params = mm_utils.parameters_from_openmm_system(mmSystem)
+  >>> displacement_fn, shift_fn = space.free()
+  >>> energy_fn, neighbor_list = mm_energy_fn(displacement_fn=displacement_fn,
+                                           parameters = params,
+                                           space_shape=space.free,
+                                           use_neighbor_list=False,
+                                           box_size=None,
+                                           use_multiplicative_isotropic_cutoff=False,
+                                           use_dsf_coulomb=False,
+                                           neighbor_kwargs={},
+                                           )
+  >>> out_energy = energy_fn(positions, parameters = params) # retrieve potential energy in units of `openmm.unit.md_unit_system` (kJ/mol)
+  """
+  check_support(space_shape, use_neighbor_list, box_size)
 
-from functools import partial
-from collections import defaultdict
-Energy = partial(defaultdict, lambda: None)
-Geometry = partial(defaultdict, lambda: None)
+  # bonded energy fns
+  bond_fns = get_bond_fns(displacement_fn) # get geometry handlers dict
+  parameter_template = check_parameters(parameters) # just make sure that parameters
+  for _key in bond_fns:
+    bond_fns[_key] = util.merge_dicts(bond_fns[_key], parameter_template[_key])
+  bonded_energy_fns = {}
+  for parameter_field in parameters._fields:
+    if parameter_field in list(bond_fns.keys()): # then it is bonded
+      mapped_bonded_energy_fn = smap.bond(
+                                     displacement_or_metric=displacement_fn,
+                                     **bond_fns[parameter_field], # `geometry_handler_fn` and `fn`
+                                     )
+      bonded_energy_fns[parameter_field] = mapped_bonded_energy_fn
+    elif parameter_field in [camel_to_snake(_entry) for _entry in CANONICAL_MM_NONBONDED_PARAMETER_NAMES]: # nonbonded
+      nonbonded_parameters = getattr(parameters, parameter_field)
+      are_nonbonded_exception_parameters = True if 'nonbonded_exception_parameters' in parameters._fields else False
+      if are_nonbonded_exception_parameters: # handle custom nonbonded mask
+        n_particles=nonbonded_parameters.charge.shape[0] # query the number of particles
+        padded_exception_array = query_idx_in_pair_exceptions(indices=jnp.arange(n_particles), pair_exceptions=getattr(getattr(parameters, 'nonbonded_exception_parameters'), 'particles'))
+        custom_mask_fn = nonbonded_exception_mask_fn(n_particles=n_particles, padded_exception_array=padded_exception_array)
+        neighbor_kwargs = util.merge_dicts({'custom_mask_fn': custom_mask_fn}, neighbor_kwargs)
+      nonbonded_energy_fn, neighbor_fn = nonbonded_neighbor_list(displacement_or_metric=displacement_fn,
+                             nonbonded_parameters=getattr(parameters, parameter_field),
+                             use_neighbor_list=use_neighbor_list,
+                             use_multiplicative_isotropic_cutoff=use_multiplicative_isotropic_cutoff,
+                             use_dsf_coulomb=use_dsf_coulomb,
+                             multiplicative_isotropic_cutoff_kwargs=multiplicative_isotropic_cutoff_kwargs,
+                             particle_exception_indices=parameters.nonbonded_exception_parameters.particles if are_nonbonded_exception_parameters else None,
+                             neighbor_kwargs=neighbor_kwargs)
+    else:
+      raise NotImplementedError(f"""parameter name {parameter_field} is not currently supported by
+      `CANONICAL_MM_BOND_PARAMETER_NAMES` or `CANONICAL_MM_NONBONDED_PARAMETER_NAMES`""")
 
-from jax_md.space import distance
+  def bond_handler(parameters, **unused_kwargs):
+    """a simple function to easily `tree_map` bond functions"""
+    bonds = {_key: getattr(parameters, _key).particles for _key in parameters._fields if _key in bond_fns.keys()}
+    bond_types = {_key: getattr(parameters, _key)._replace(particles=None)._asdict() for _key in bonds.keys()}
+    return bonds, bond_types
 
-class GetGeometry(object):
-    @staticmethod
-    def get_geometry_distance(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-            displacement: Callable,
-        ) -> jnp.ndarray:
-        x0 = coordinates[heterograph['bond']['idxs'][..., 0]]
-        x1 = coordinates[heterograph['bond']['idxs'][..., 1]]
-        delta_x = displacement(x0, x1)
-        return distance(delta_x)
+  def nonbonded_handler(parameters, **unused_kwargs) -> Dict:
+    if 'nonbonded_parameters' in parameters._fields:
+      return parameters.nonbonded_parameters._asdict()
+    else:
+      return {}
 
-    @staticmethod
-    def get_geometry_bond(*args, **kwargs):
-        return GetGeometry.get_geometry_distance(*args, **kwargs)
+  def energy_fn(R: Array, **dynamic_kwargs) -> Array:
+    bonds, bond_types = bond_handler(**dynamic_kwargs)
+    bonded_energies = jax.tree_util.tree_map(lambda _f, _bonds, _bond_types : _f(R, _bonds, _bond_types),
+                                             bonded_energy_fns, bonds, bond_types)
+    accum = accum + util.high_precision_sum(jnp.array(list(bonded_energies.values())))
 
-    @staticmethod
-    def get_geometry_nonbonded(*args, **kwargs):
-        return GetGeometry.get_geometry_distance(*args, **kwargs)
+    # nonbonded
+    nonbonded_parameters = nonbonded_handler(**dynamic_kwargs)
+    nonbonded_energy = nonbonded_energy_fn(R, nonbonded_parameters_dict=nonbonded_parameters)
+    accum = accum + nonbonded_energy # handle if/not in
+    return accum
 
-    @staticmethod
-    def get_geometry_onefour(*args, **kwargs):
-        return GetGeometry.get_geometry_distance(*args, **kwargs)
-
-    @staticmethod
-    def get_geometry_angle(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-            displacement: Callable,
-        ) -> jnp.ndarray:
-
-        x0 = coordinates[heterograph['angle']['idxs'][..., 0]]
-        x1 = coordinates[heterograph['angle']['idxs'][..., 1]]
-        x2 = coordinates[heterograph['angle']['idxs'][..., 2]]
-
-        left = displacement(x1, x0)
-        right = displacement(x1, x2)
-
-        angle = jnp.arctan2(
-            jnp.linalg.norm(jnp.cross(left, right), ord=2, axis=-1),
-            jnp.sum(left * right, axis=-1),
-        )
-        return angle
-
-    @staticmethod
-    def get_geometry_torsion(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-            displacement: Callable,
-            torsion_type: str="proper",
-        ) -> jnp.ndarray:
-
-        x0 = coordinates[heterograph[torsion_type]['idxs'][..., 0]]
-        x1 = coordinates[heterograph[torsion_type]['idxs'][..., 1]]
-        x2 = coordinates[heterograph[torsion_type]['idxs'][..., 2]]
-        x3 = coordinates[heterograph[torsion_type]['idxs'][..., 3]]
-
-        r01 = displacement(x1, x0)
-        r21 = displacement(x1, x2)
-        r23 = displacement(x3, x2)
-
-        n1 = jnp.cross(r01, r21)
-        n2 = jnp.cross(r21, r23)
-
-        rkj_normed = r21 / jnp.linalg.norm(r21, ord=2, axis=-1, keepdims=True)
-
-        y = jnp.sum(jnp.multiply(jnp.cross(n1, n2), rkj_normed), axis=-1)
-        x = jnp.sum(jnp.multiply(n1, n2), axis=-1)
-
-        # choose quadrant correctly
-        theta = jnp.arctan2(y, x)
-        return theta
-
-    @staticmethod
-    def get_geometry_proper(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-        ) -> jnp.ndarray:
-        return GetGeometry.get_geometry_torsion(
-            heterograph, coordinates, torsion_type="proper"
-        )
-
-    @staticmethod
-    def get_geometry_improper(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-        ) -> jnp.ndarray:
-        return GetGeometry.get_geometry_torsion(
-            heterograph, coordinates, torsion_type="improper"
-        )
-
-    @staticmethod
-    def get_geometry(
-            heterograph: Heterograph, coordinates: jnp.ndarray,
-        ) -> Geometry:
-        geometry = Geometry()
-        for term in heterograph.keys():
-            geometry[term] = getattr(GetGeometry, "get_geometry_%s" % term)(
-                heterograph, coordinates,
-            )
-        return geometry
-
-def get_geometry(
-        heterograph: Heterograph, coordinates: jnp.ndarray,
-    ) -> Geometry:
-    return GetGeometry.get_geometry(heterograph, coordinates)
-
-class GetEnergy(object):
-    @staticmethod
-    def get_energy_linear_mixture(
-            x: jnp.ndarray, coefficients: jnp.ndarray, phases: Tuple,
-        ) -> jnp.ndarray:
-        # partition the dimensions
-        # (, )
-        b1 = phases[0]
-        b2 = phases[1]
-
-        # (batch_size, 1)
-        k1 = jnp.exp(coefficients[:, 0][:, None])
-        k2 = jnp.exp(coefficients[:, 1][:, None])
-
-        # get the original parameters
-        # (batch_size, )
-        # k, b = linear_mixture_to_original(k1, k2, b1, b2)
-
-        # (batch_size, 1)
-        u1 = k1 * (x - b1) ** 2
-        u2 = k2 * (x - b2) ** 2
-
-        u = 0.5 * (u1 + u2)  # - k1 * b1 ** 2 - k2 ** b2 ** 2 + b ** 2
-
-        return u
-
-    @staticmethod
-    def get_energy_bond(x, coefficients):
-        return GetEnergy.get_energy_linear_mixture(x, coefficients, BOND_PHASES)
-
-    @staticmethod
-    def get_energy_angle(x, coefficients):
-        return GetEnergy.get_energy_linear_mixture(x, coefficients, ANGLE_PHASES)
-
-    @staticmethod
-    def get_energy_torsion(
-        x: jnp.ndarray, k: jnp.ndarray,
-        periodicity: jnp.ndarray=jnp.arange(1, 7),
-        phases: jnp.ndarray=jnp.zeros(6),
-    ):
-        n_theta = jnp.expand_dims(x, -1) * periodicity
-        n_theta_minus_phases = n_theta - phases
-        cos_n_theta_minus_phases = jnp.cos(n_theta_minus_phases)
-        k = jnp.expand_dims(k, -2)
-        energy = (
-            jax.nn.relu(k) * (cos_n_theta_minus_phases + 1.0)
-            - jax.nn.relu(0.0 - k) * (cos_n_theta_minus_phases - 1.0)
-        ).sum(axis=-1)
-        return energy
-
-    @staticmethod
-    def get_energy_improper(*args, **kwargs):
-        return GetEnergy.get_energy_torsion(*args, **kwargs)
-
-    @staticmethod
-    def get_energy_proper(*args, **kwargs):
-        return GetEnergy.get_energy_torsion(*args, **kwargs)
-
-    @staticmethod
-    def get_energy(
-            parameters: Heterograph, geometry: Geometry
-        ):
-        energy = Energy()
-        energy['bond'] = GetEnergy.get_energy_bond(
-            geometry['bond'], parameters['bond']['coefficients'],
-        )
-
-        energy['angle'] = GetEnergy.get_energy_angle(
-            geometry['angle'], parameters['angle']['coefficients'],
-        )
-
-        energy['proper'] = GetEnergy.get_energy_proper(
-            geometry['proper'], parameters['proper']['k'],
-        )
-
-        energy['improper'] = GetEnergy.get_energy_improper(
-            geometry['improper'], parameters['improper']['k'],
-        )
-
-        return energy
-
-def get_energy(parameters, geometry):
-    return GetEnergy.get_energy(parameters, geometry)
-
-def sum_energy(energy: Energy):
-    energy = jax.tree_util.tree_map(jnp.sum, energy)
-    energy = sum(energy.values())
-    return energy
+  return energy_fn, neighbor_fn

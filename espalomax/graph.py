@@ -77,8 +77,8 @@ class Graph(NamedTuple):
             nodes=nodes,
             senders=senders,
             receivers=receivers,
-            n_node=n_node,
-            n_edge=n_edge,
+            n_node=jnp.array([n_node]),
+            n_edge=jnp.array([n_edge]),
             edges=None,
             globals=None,
         )
@@ -207,7 +207,7 @@ def parameters_from_molecule(
 
 def batch(graphs):
     homographs = jraph.batch([graph.homograph for graph in graphs])
-    offsets = homographs.n_nodes
+    offsets = homographs.n_node
     heterographs = Heterograph()
     for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
         heterographs[term]["idxs"] = jnp.concatenate(
@@ -217,7 +217,4 @@ def batch(graphs):
             ],
             axis=0
         )
-
-        # for key in graphs[0].heterograph[term].keys():
-
     return Graph(homograph=homographs, heterograph=heterographs)
