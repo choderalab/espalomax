@@ -23,26 +23,32 @@ def run():
     displacement_fn, shift_fn = space.free()
 
     from jax_md.mm import mm_energy_fn
-    energy_fn, neighbor_fn = mm_energy_fn(
-        displacement_fn, ff_params,
-        space_shape=space.free,
-        use_neighbor_list=False,
-        box_size=None,
-        use_multiplicative_isotropic_cutoff=False,
-        use_dsf_coulomb=False,
-        neighbor_kwargs={},
-    )
 
+    # @jax.jit
     def u_from_nn_params(nn_params):
         ff_params = model.apply(nn_params, graph)
-        ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
+        ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params)
+        print(ff_params)
+
+        energy_fn, neighbor_fn = mm_energy_fn(
+            displacement_fn, ff_params,
+            space_shape=space.free,
+            use_neighbor_list=False,
+            box_size=None,
+            use_multiplicative_isotropic_cutoff=False,
+            use_dsf_coulomb=False,
+            neighbor_kwargs={},
+        )
+
         return energy_fn(
             jax.random.normal(key=jax.random.PRNGKey(2666), shape=(6, 3)),
             parameters=ff_params,
         )
 
-    du_dp = jax.grad(u_from_nn_params)
-    print(du_dp(nn_params))
+    u_from_nn_params(nn_params)
+
+    # du_dp = jax.grad(u_from_nn_params)
+    # print(du_dp(nn_params))
 
 if __name__ == "__main__":
     run()
