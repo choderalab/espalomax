@@ -137,3 +137,6 @@ parm_at_Frosst.tgz
 
 # misc
 .DS_Store
+
+# data
+*.hdf5
