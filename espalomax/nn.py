@@ -15,7 +15,7 @@ JANOSSY_POOLING_PARAMETERS = {
 }
 
 import math
-BOND_PHASES = (1.5, 6.0)
+BOND_PHASES = (0.00, 1.0)
 ANGLE_PHASES = (0.0, math.pi)
 
 class AttentionQueryFn(nn.Module):
@@ -112,7 +112,7 @@ class JanossyPooling(nn.Module):
         parameters = Heterograph()
         for out_feature in self.out_features.keys():
             h = nodes[heterograph[out_feature]['idxs']]
-            if len(h) > 0:
+            if jnp.size(h) > 0:
                 layer = getattr(self, "d_%s" % out_feature)
                 if out_feature != "improper": # mirror symmetry
                     h = layer(h.reshape(*h.shape[:-2], -1))\
@@ -128,15 +128,15 @@ class JanossyPooling(nn.Module):
 
                     h = sum(hs)
             else:
-                h = jnp.array([], dtype=jnp.float32)
+                h = jnp.array([[]], dtype=jnp.float32)
 
             for parameter in self.out_features[out_feature]:
                 layer = getattr(self, "d_%s_%s" % (out_feature, parameter))
 
-                if len(h) > 0:
+                if jnp.size(h) > 0:
                     parameters[out_feature][parameter] = layer(h)
                 else:
-                    parameters[out_feature][parameter] = jnp.array([], dtype=jnp.float32)
+                    parameters[out_feature][parameter] = jnp.array([[]], dtype=jnp.float32)
 
                 parameters[out_feature]["idxs"] = heterograph[out_feature]["idxs"]
         return parameters
@@ -150,8 +150,6 @@ class Parametrization(nn.Module):
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
         return parameters
-
-
 
 def linear_mixture_to_original(coefficients, phases):
     k1 = coefficients[..., 0]
@@ -170,6 +168,20 @@ def to_jaxmd_mm_energy_fn_parameters(parameters, to_replace=None):
         HarmonicAngleParameters,
         PeriodicTorsionParameters,
     )
+
+    proper_idxs = parameters["proper"]["idxs"]
+    proper_k = parameters["proper"]["k"]
+    improper_idxs = parameters["improper"]["idxs"]
+    improper_k = parameters["improper"]["k"]
+
+    if jnp.size(proper_idxs) == 0:
+        proper_idxs = jnp.zeros((0, 4), jnp.int32)
+        proper_k = jnp.zeros((0, 6), jnp.float32)
+
+    if jnp.size(improper_idxs) == 0:
+        improper_idxs = jnp.zeros((0, 4), jnp.int32)
+        improper_k = jnp.zeros((0, 6), jnp.float32)
+
 
     epsilon_bond, length_bond = linear_mixture_to_original(
             parameters['bond']['coefficients'], BOND_PHASES
@@ -194,14 +206,14 @@ def to_jaxmd_mm_energy_fn_parameters(parameters, to_replace=None):
     periodic_torsion_parameters = PeriodicTorsionParameters(
         particles=jnp.concatenate(
             [
-                jnp.repeat(parameters["proper"]["idxs"], 6, 0),
-                jnp.repeat(parameters["improper"]["idxs"], 6, 0),
+                jnp.repeat(proper_idxs, 6, 0),
+                jnp.repeat(improper_idxs, 6, 0),
             ],
         ),
         amplitude=jnp.concatenate(
             [
-                parameters["proper"]["k"].flatten(),
-                parameters["improper"]["k"].flatten(),
+                proper_k.flatten(),
+                improper_k.flatten(),
             ],
         ),
         periodicity=jnp.tile(
