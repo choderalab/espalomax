@@ -21,7 +21,7 @@ class DataLoader(object):
 
     def _prepare(self):
         data = []
-        for key in list(self.file_handle.keys())[:1]:
+        for key in list(self.file_handle.keys()):
             record = self.file_handle[key]
             molecule = Molecule.from_mapped_smiles(
                         self.file_handle[key]["smiles"][0].decode('UTF-8'),
@@ -81,8 +81,11 @@ def run():
          apply_fn=model.apply, params=nn_params, tx=optimizer,
     )
 
-    for g, x, u in dataloader:
-        state = step(state, g, x, u)
+    import tqdm
+    for idx_batch in tqdm.tqdm(range(100)):
+        for g, x, u in dataloader:
+            state = step(state, g, x, u)
+        save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":
     run()
