@@ -21,7 +21,7 @@ class DataLoader(object):
 
     def _prepare(self):
         data = []
-        for key in list(self.file_handle.keys())[:10]:
+        for key in list(self.file_handle.keys())[:1]:
             record = self.file_handle[key]
             molecule = Molecule.from_mapped_smiles(
                         self.file_handle[key]["smiles"][0].decode('UTF-8'),
@@ -30,6 +30,8 @@ class DataLoader(object):
             g = esp.Graph.from_openff_molecule(molecule)
             x = jnp.array(record["conformations"]) * BOHR_TO_NM
             u = jnp.array(record["formation_energy"]) * HARTREE_TO_KCAL_PER_MOL
+            u0 = esp.mm.get_nonbonded_energy(molecule, x)
+            u = u - u0
         data.append((g, x, u))
         data = tuple(data)
         self.data = data
@@ -40,6 +42,9 @@ class DataLoader(object):
         return self
 
     def __next__(self):
+        if len(self.idxs) == 0:
+            raise StopIteration
+
         idx = self.idxs.pop()
         g, x, u = self.data[idx]
         if len(x) != 50:
@@ -55,38 +60,29 @@ def run():
         janossy_pooling=esp.nn.JanossyPooling(64, 3),
     )
 
-    base_parameters = esp.graph.parameters_from_molecule(molecule)
+    def get_loss(nn_params, g, x, u):
+        ff_params = model.apply(nn_params, g)
+        u_hat = esp.mm.get_energy(ff_params, x)
+        return jnp.abs(u - u_hat).mean()
+
+    def step(state, g, x, u):
+        nn_params = state.params
+        grads = jax.grad(get_loss)(nn_params, g, x, u)
+        state = state.apply_gradients(grads=grads)
+        return state
+
+    import optax
+    optimizer = optax.adam(1e-3)
+
     nn_params = model.init(jax.random.PRNGKey(2666), g)
-    ff_params = model.apply(nn_params, g)
-    ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
-
-    from jax_md import space
-    displacement_fn, shift_fn = space.free()
-
-    from jax_md.mm import mm_energy_fn
-    energy_fn, neighbor_fn = mm_energy_fn(
-        displacement_fn, ff_params,
-        space_shape=space.free,
-        use_neighbor_list=False,
-        box_size=None,
-        use_multiplicative_isotropic_cutoff=False,
-        use_dsf_coulomb=False,
-        neighbor_kwargs={},
+    from flax.training.train_state import TrainState
+    from flax.training.checkpoints import save_checkpoint
+    state = TrainState.create(
+         apply_fn=model.apply, params=nn_params, tx=optimizer,
     )
 
-    def u_from_nn_params(nn_params):
-        ff_params = model.apply(nn_params, graph)
-        ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
-        return energy_fn(
-            jax.random.normal(key=jax.random.PRNGKey(2666), shape=(6, 3)),
-            parameters=ff_params,
-        )
-
-
-
-
-
-
+    for g, x, u in dataloader:
+        state = step(state, g, x, u)
 
 if __name__ == "__main__":
     run()

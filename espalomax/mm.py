@@ -15,30 +15,36 @@ from .nn import BOND_PHASES, ANGLE_PHASES
 from .graph import Graph, parameters_from_molecule
 
 def get_distances(conformations, idxs):
-    x0 = conformations[idxs[:, 0], :]
-    x1 = conformations[idxs[:, 1], :]
+    x0 = conformations[..., idxs[:, 0], :]
+    x1 = conformations[..., idxs[:, 1], :]
     x01 = x0 - x1
     return jax_md.space.distance(x01)
 
 def get_angles(conformations, idxs):
-    x0 = conformations[idxs[:, 0], :]
-    x1 = conformations[idxs[:, 1], :]
-    x2 = conformations[idxs[:, 2], :]
+    x0 = conformations[..., idxs[:, 0], :]
+    x1 = conformations[..., idxs[:, 1], :]
+    x2 = conformations[..., idxs[:, 2], :]
     x10 = x0 - x1
     x12 = x2 - x1
-    return jnp.arccos(
-        jax.vmap(jax_md.quantity.cosine_angle_between_two_vectors)(x10, x12),
-    )
+
+    fn = jax_md.quantity.cosine_angle_between_two_vectors
+    for _ in range(len(x0.shape)-1):
+        fn = jax.vmap(fn)
+    return fn(x10, x12)
 
 def get_dihedrals(conformations, idxs):
-    x1 = conformations[idxs[:, 0], :]
-    x2 = conformations[idxs[:, 1], :]
-    x3 = conformations[idxs[:, 2], :]
-    x4 = conformations[idxs[:, 3], :]
+    x1 = conformations[..., idxs[:, 0], :]
+    x2 = conformations[..., idxs[:, 1], :]
+    x3 = conformations[..., idxs[:, 2], :]
+    x4 = conformations[..., idxs[:, 3], :]
     x12 = x2 - x1
     x32 = x2 - x3
     x34 = x4 - x3
-    return jax.vmap(jax_md.quantity.angle_between_two_half_planes)(x12, x32, x34)
+
+    fn = jax_md.quantity.angle_between_two_half_planes
+    for _ in range(len(x1.shape)-1):
+        fn = jax.vmap(fn)
+    return fn(x12, x32, x34)
 
 def linear_mixture_energy(x, coefficients, phases):
     b0, b1 = phases
