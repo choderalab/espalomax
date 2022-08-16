@@ -175,6 +175,31 @@ class Graph(NamedTuple):
         molecule = Molecule.from_smiles(smiles)
         return cls.from_openff_molecule(molecule)
 
+    @property
+    def n_atoms(self):
+        """Number of atoms."""
+        return int(self.homograph.n_node)
+
+    @property
+    def n_bonds(self):
+        """Number of bonds."""
+        return len(self.heterograph["bond"]["idxs"])
+
+    @property
+    def n_angles(self):
+        """Number of angles."""
+        return len(self.heterograph["angle"]["idxs"])
+
+    @property
+    def n_propers(self):
+        """Number of propers."""
+        return len(self.heterograph["proper"]["idxs"])
+
+    @property
+    def n_impropers(self):
+        """Number of impropers."""
+        return len(self.heterograph["improper"]["idxs"])
+
 def parameters_from_molecule(
         molecule: Molecule,
         base_forcefield: str = "openff_unconstrained-2.0.0.offxml",
@@ -227,7 +252,7 @@ def dummy(
     n_impropers: int,
 ):
     nodes = jnp.arange(n_atoms)
-    sendes = receivers = jnp.zeros(n_bonds)
+    senders = receivers = jnp.zeros(n_bonds)
 
     homograph = GraphsTuple(
         nodes=nodes,
