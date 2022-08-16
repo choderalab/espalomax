@@ -218,3 +218,31 @@ def batch(graphs):
             axis=0
         )
     return Graph(homograph=homographs, heterograph=heterographs)
+
+def dummy(
+    n_atoms: int,
+    n_bonds: int,
+    n_angles: int,
+    n_propers: int,
+    n_impropers: int,
+):
+    nodes = jnp.arange(n_atoms)
+    sendes = receivers = jnp.zeros(n_bonds)
+
+    homograph = GraphsTuple(
+        nodes=nodes,
+        senders=senders,
+        receivers=receivers,
+        n_node=jnp.array([n_bonds]),
+        n_edge=jnp.array([n_bonds]),
+        edges=None,
+        globals=None,
+    )
+
+    heterograph = Heterograph()
+    heterograph["bond"] = jnp.zeros(n_bonds, 2)
+    heterograph["angle"] = jnp.zeros(n_angles, 3)
+    heterograph["n_propers"] = jnp.zeros(n_propers, 4)
+    heterograph["n_impropers"] = jnp.zeros(n_impropers, 4)
+
+    return Graph(homograph=homograph, heterograph=heterograph)
