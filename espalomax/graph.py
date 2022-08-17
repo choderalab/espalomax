@@ -172,7 +172,7 @@ class Graph(NamedTuple):
         Graph
             Resulting molecule.
         """
-        molecule = Molecule.from_smiles(smiles)
+        molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
         return cls.from_openff_molecule(molecule)
 
     @property
@@ -235,6 +235,9 @@ def batch(graphs):
     offsets = homographs.n_node
     heterographs = Heterograph()
     for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
+        for graph in graphs:
+            print(term, graph.heterograph[term]["idxs"])
+
         heterographs[term]["idxs"] = jnp.concatenate(
             [
                 graph.heterograph[term]["idxs"] + offsets[idx]
@@ -250,24 +253,28 @@ def dummy(
     n_angles: int,
     n_propers: int,
     n_impropers: int,
+    n_nonbonded: int,
+    n_onefour: int,
 ):
-    nodes = jnp.arange(n_atoms)
-    senders = receivers = jnp.zeros(n_bonds)
+    nodes = jnp.zeros((n_atoms, 118), jnp.int32)
+    senders = receivers = jnp.zeros(n_bonds, jnp.int32)
 
     homograph = GraphsTuple(
         nodes=nodes,
         senders=senders,
         receivers=receivers,
-        n_node=jnp.array([n_bonds]),
-        n_edge=jnp.array([n_bonds]),
+        n_node=jnp.array([n_bonds], jnp.int32),
+        n_edge=jnp.array([n_bonds], jnp.int32),
         edges=None,
         globals=None,
     )
 
     heterograph = Heterograph()
-    heterograph["bond"] = jnp.zeros(n_bonds, 2)
-    heterograph["angle"] = jnp.zeros(n_angles, 3)
-    heterograph["n_propers"] = jnp.zeros(n_propers, 4)
-    heterograph["n_impropers"] = jnp.zeros(n_impropers, 4)
+    heterograph["bond"]["idxs"] = jnp.zeros((n_bonds, 2), jnp.int32)
+    heterograph["angle"]["idxs"] = jnp.zeros((n_angles, 3), jnp.int32)
+    heterograph["proper"]["idxs"] = jnp.zeros((n_propers, 4), jnp.int32)
+    heterograph["improper"]["idxs"] = jnp.zeros((n_impropers, 4), jnp.int32)
+    heterograph["nonbonded"]["idxs"] = jnp.zeros((n_nonbonded, 2), jnp.int32)
+    heterograph["onefour"]["idxs"] = jnp.zeros((n_onefour, 2), jnp.int32)
 
     return Graph(homograph=homograph, heterograph=heterograph)
