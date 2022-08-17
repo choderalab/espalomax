@@ -178,7 +178,7 @@ class Graph(NamedTuple):
     @property
     def n_atoms(self):
         """Number of atoms."""
-        return int(self.homograph.n_node)
+        return int(sum(self.homograph.n_node))
 
     @property
     def n_bonds(self):
@@ -233,11 +233,9 @@ def parameters_from_molecule(
 def batch(graphs):
     homographs = jraph.batch([graph.homograph for graph in graphs])
     offsets = homographs.n_node
+    offsets = jnp.concatenate([jnp.array([0]), offsets[:-1]])
     heterographs = Heterograph()
     for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
-        for graph in graphs:
-            print(term, graph.heterograph[term]["idxs"])
-
         heterographs[term]["idxs"] = jnp.concatenate(
             [
                 graph.heterograph[term]["idxs"] + offsets[idx]
@@ -253,9 +251,33 @@ def dummy(
     n_angles: int,
     n_propers: int,
     n_impropers: int,
-    n_nonbonded: int,
-    n_onefour: int,
+    n_nonbonded: int=0,
+    n_onefour: int=0,
 ):
+    """Return a dummy graph with specified number of entities.
+
+    Parameters
+    ----------
+    n_atoms : int
+        Number of atoms.
+    n_bonds : int
+        Number of bonds.
+    n_angles : int
+        Number of angles.
+    n_propers : int
+        Number of proper torsions.
+    n_impropers : int
+        Number of imporper torsions.
+    n_nonbonded : int(default=0)
+        Number of nonbonded interations.
+    n_onefour : int(default=0)
+        Number of onefour interactions.
+
+    Returns
+    -------
+    Graph
+        Dummy graph.
+    """
     nodes = jnp.zeros((n_atoms, 118), jnp.int32)
     senders = receivers = jnp.zeros(n_bonds, jnp.int32)
 
@@ -278,3 +300,15 @@ def dummy(
     heterograph["onefour"]["idxs"] = jnp.zeros((n_onefour, 2), jnp.int32)
 
     return Graph(homograph=homograph, heterograph=heterograph)
+
+def heteromask(graph: Graph):
+    mask = Heterograph()
+    upper = jnp.cumsum(graph.homograph.n_node)
+    lower = jnp.concatenate([jnp.array([0]), upper[:-1]])
+    for term in ["bond", "angle", "proper", "improper", "nonbonded", "onefour"]:
+        idxs = graph.heterograph[term]["idxs"]
+        idxs = jnp.expand_dims(idxs, -1)
+        _mask = (lower <= idxs) * (upper > idxs)
+        _mask = _mask.prod(-2).argmax(-1)
+        mask[term]["mask"] = _mask
+    return mask

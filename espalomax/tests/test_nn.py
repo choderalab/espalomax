@@ -48,6 +48,5 @@ def test_parametrization_with_replacement():
     nn_params = model.init(jax.random.PRNGKey(2666), graph)
     ff_params = model.apply(nn_params, graph)
     ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
-    print(ff_params.periodic_torsion_parameters)
     from jax_md.mm import check_parameters
     check_parameters(ff_params)
