@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, Optional
 from functools import partial
 from openff.toolkit.topology import Molecule
 import jax
@@ -66,6 +66,7 @@ def get_torsion_energy(conformations, idxs, amplitude, periodicity, phase):
 def get_energy(
     parameters: Mapping,
     conformations: jnp.ndarray,
+    mask: Optional[jnp.ndarray] = None,
 ):
     """Compute the energy given a set of parameters and conformations.
 
@@ -101,32 +102,41 @@ def get_energy(
         coefficients=parameters["angle"]["coefficients"],
     )
 
-    torsion_energy = get_torsion_energy(
+    proper_energy = get_torsion_energy(
         conformations,
-        idxs=jnp.concatenate(
-            [
-                jnp.repeat(proper_idxs, 6, 0),
-                jnp.repeat(improper_idxs, 6, 0),
-            ],
-        ),
-        amplitude=jnp.concatenate(
-            [
-                proper_k.flatten(),
-                improper_k.flatten(),
-            ],
-        ),
+        idxs=jnp.repeat(proper_idxs, 6, 0),
+        amplitude=proper_k.flatten(),
         periodicity=jnp.tile(
             jnp.arange(1, 7),
-            len(parameters["proper"]["idxs"]) \
-            + len(parameters["improper"]["idxs"])
+            len(parameters["proper"]["idxs"])
         ),
         phase=jnp.zeros(
-            6 * len(parameters["proper"]["idxs"]) \
-            + 6 * len(parameters["improper"]["idxs"])
+            6 * len(parameters["proper"]["idxs"])
         ),
     )
 
-    return bond_energy.sum(-1) + angle_energy.sum(-1) + torsion_energy.sum(-1)
+    improper_energy = get_torsion_energy(
+        conformations,
+        idxs=jnp.repeat(improper_idxs, 6, 0),
+        amplitude=improper_k.flatten(),
+        periodicity=jnp.tile(
+            jnp.arange(1, 7),
+            len(parameters["improper"]["idxs"])
+        ),
+        phase=jnp.zeros(
+            6 * len(parameters["improper"]["idxs"])
+        ),
+    )
+
+    if mask is None:
+        return bond_energy.sum(-1) + angle_energy.sum(-1) + proper_energy.sum(-1) + improper_energy.sum(-1)
+    else:
+        bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"])
+        angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"])
+        proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0))
+        improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0))
+
+    return bond_energy + angle_energy + proper_energy + improper_energy
 
 def get_nonbonded_energy(
     molecule: Molecule,

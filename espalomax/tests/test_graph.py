@@ -20,3 +20,11 @@ def test_batching():
     g0 = esp.Graph.from_openff_molecule(Molecule.from_smiles("C=C"))
     g1 = esp.Graph.from_openff_molecule(Molecule.from_smiles("C=CC"))
     g = esp.graph.batch((g0, g1))
+
+def test_heteromask():
+    import espalomax as esp
+    from openff.toolkit.topology import Molecule
+    g0 = esp.Graph.from_openff_molecule(Molecule.from_smiles("C=C"))
+    g1 = esp.Graph.from_openff_molecule(Molecule.from_smiles("C=CC"))
+    g = esp.graph.batch((g0, g1))
+    heteromask = esp.graph.heteromask(g)
