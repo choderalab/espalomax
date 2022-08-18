@@ -4,7 +4,6 @@ from openff.toolkit.topology import Molecule
 import h5py
 
 def process_one_record(collection, record_name):
-    try:
         record = collection.get_record(record_name, specification="default")
         entry = collection.get_entry(record_name)
         molecule = Molecule.from_qcschema(entry)
@@ -14,8 +13,6 @@ def process_one_record(collection, record_name):
         x = onp.stack([snapshot.get_molecule().geometry for snapshot in trajectory])
         f = onp.stack([snapshot.dict()["return_result"] for snapshot in trajectory])
         return smiles, x, u, f
-    except:
-        return None
 
 def run(args):
     client = FractalClient()
@@ -37,16 +34,23 @@ def run(args):
         )
     results = [result.result() for result in results]
     results = [result for result in results if result is not None]
-
     out = h5py.File(out, "w")
 
-    for smiles, x, u, f in out:
+    for smiles, x, u, f in results:
         name = smiles.replace("/", "")
-        group = out.create_group(name)
-        group.create_dataset("smiles", data=[smiles])
-        group.create_dataset("x", data=[x])
-        group.create_dataset("u", data=[u])
-        group.create_dataset("f", data=[f])
+        if name not in out:
+            group = out.create_group(name)
+            group.create_dataset("smiles", data=[smiles])
+            group.create_dataset("x", data=x)
+            group.create_dataset("u", data=u)
+            group.create_dataset("f", data=f)
+        else:
+            group = out[name]
+            _x, _u, _f = group["x"], group["u"], group["f"]
+            del group["x"], group["u"], group["f"]
+            group.create_dataset("x", data=onp.concatenate([_x, x], 0))
+            group.create_dataset("u", data=onp.concatenate([_u, u], 0))
+            group.create_dataset("f", data=onp.concatenate([_f, f], 0))
 
 if __name__ == "__main__":
     import argparse
