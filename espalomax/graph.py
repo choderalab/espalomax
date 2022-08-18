@@ -7,7 +7,13 @@ from collections import defaultdict
 from functools import partial
 import jraph
 
-Heterograph = partial(defaultdict, lambda: defaultdict(lambda: None))
+def _lambda_none():
+    return None
+
+def _default_fn():
+    return defaultdict(_lambda_none)
+
+Heterograph = partial(defaultdict, _default_fn)
 
 
 class Graph(NamedTuple):
