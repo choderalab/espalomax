@@ -234,6 +234,7 @@ def batch(graphs):
     homographs = jraph.batch([graph.homograph for graph in graphs])
     offsets = homographs.n_node
     offsets = jnp.concatenate([jnp.array([0]), offsets[:-1]])
+    offsets = jnp.cumsum(offsets)
     heterographs = Heterograph()
     for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
         heterographs[term]["idxs"] = jnp.concatenate(

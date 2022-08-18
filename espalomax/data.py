@@ -2,7 +2,7 @@ from typing import Optional, List, Tuple
 import numpy as onp
 import jax
 import jax.numpy as jnp
-from .graph import Graph, dummy, batch
+from .graph import Graph, dummy, batch, heteromask
 
 class PadToConstantDataLoader:
     def __init__(self, data, batch_size):
@@ -115,8 +115,8 @@ class PadToConstantDataLoader:
         us = us + (u_dummy,)
 
         g = batch(gs)
-
         x = jnp.concatenate(xs, 1)
-        u = jnp.concatenate(us, 0)
+        u = jnp.stack(us, 0)
+        m = heteromask(g)
 
-        return g, x, u
+        return g, x, u, m

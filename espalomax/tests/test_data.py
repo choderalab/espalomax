@@ -10,4 +10,4 @@ def test_constant_padding():
         u = onp.zeros((1, 1))
         data.append((g, x, u))
     dataloader = esp.data.PadToConstantDataLoader(data, 2)
-    g, x, u = next(iter(dataloader))
+    g, x, u, m = next(iter(dataloader))
