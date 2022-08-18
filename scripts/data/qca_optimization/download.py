@@ -4,6 +4,7 @@ from openff.toolkit.topology import Molecule
 import h5py
 
 def process_one_record(collection, record_name):
+    try:
         record = collection.get_record(record_name, specification="default")
         entry = collection.get_entry(record_name)
         molecule = Molecule.from_qcschema(entry)
@@ -13,25 +14,28 @@ def process_one_record(collection, record_name):
         x = onp.stack([snapshot.get_molecule().geometry for snapshot in trajectory])
         f = onp.stack([snapshot.dict()["return_result"] for snapshot in trajectory])
         return smiles, x, u, f
+    except:
+        return None
 
 def run(args):
     client = FractalClient()
     out = args.out
-    if len(out) == 0:
-        out = args.dataset.replace(" ", "") + ".hdf5"
-    collection = client.get_collection("OptimizationDataset", args.dataset)
-    record_names = list(collection.data.records)
-
     max_workers = args.max_workers
     if max_workers == 0:
         max_workers = None
     from concurrent.futures import ProcessPoolExecutor
     pool = ProcessPoolExecutor(max_workers=max_workers)
     results = []
-    for record_name in record_names:
-        results.append(
-            pool.submit(process_one_record, collection, record_name)
-        )
+
+    for dataset in args.dataset:
+        collection = client.get_collection("OptimizationDataset", dataset)
+        record_names = list(collection.data.records)
+
+        for record_name in record_names:
+            results.append(
+                pool.submit(process_one_record, collection, record_name)
+            )
+
     results = [result.result() for result in results]
     results = [result for result in results if result is not None]
     out = h5py.File(out, "w")
@@ -55,8 +59,17 @@ def run(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=str, default="")
-    parser.add_argument("--dataset", type=str, default="OpenFF Gen 2 Opt Set 1 Roche")
+    parser.add_argument("--out", type=str, default="gen2")
+    parser.add_argument(
+        "--dataset", type=str, nargs="+",
+        default=[
+            "OpenFF Gen 2 Opt Set 1 Roche",
+            "OpenFF Gen 2 Opt Set 2 Coverage",
+            "OpenFF Gen 2 Opt Set 3 Pfizer Discrepancy",
+            "OpenFF Gen 2 Opt Set 4 eMolecules Discrepancy",
+            "OpenFF Gen 2 Opt Set 5 Bayer",
+        ]
+    )
     parser.add_argument("--max_workers", type=str, default=0)
     args = parser.parse_args()
     run(args)
