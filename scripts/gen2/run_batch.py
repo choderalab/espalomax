@@ -50,7 +50,7 @@ def run():
     def get_loss(nn_params, g, x, u, m):
         ff_params = model.apply(nn_params, g)
         u_hat = esp.mm.get_energy(ff_params, x, m, 16)
-        return jnp.abs(u - u_hat).mean()
+        return jnp.abs(u[:-1] - u_hat[:-1]).mean()
 
     @jax.jit
     def step(state, g, x, u, m):

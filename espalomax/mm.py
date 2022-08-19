@@ -132,10 +132,10 @@ def get_energy(
     if mask is None:
         return bond_energy.sum(-1) + angle_energy.sum(-1) + proper_energy.sum(-1) + improper_energy.sum(-1)
     else:
-        bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"], num_segments=batch_size)
-        angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"], num_segments=batch_size)
-        proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0), num_segments=batch_size)
-        improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0), num_segments=batch_size)
+        bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"], num_segments=batch_size+1)
+        angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"], num_segments=batch_size+1)
+        proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0), num_segments=batch_size+1)
+        improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0), num_segments=batch_size+1)
 
     return bond_energy + angle_energy + proper_energy + improper_energy
 

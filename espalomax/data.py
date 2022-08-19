@@ -14,11 +14,16 @@ class PadToConstantDataLoader:
         max_n_atoms = max_n_bonds = max_n_angles \
             = max_n_propers = max_n_impropers = 0
         for g, _, __ in self.data:
-            self.max_n_atoms = max(max_n_atoms, g.n_atoms) * self.batch_size
-            self.max_n_bonds = max(max_n_bonds, g.n_bonds) * self.batch_size
-            self.max_n_angles = max(max_n_angles, g.n_angles) * self.batch_size
-            self.max_n_propers = max(max_n_propers, g.n_propers) * self.batch_size
-            self.max_n_impropers = max(max_n_impropers, g.n_impropers) * self.batch_size
+            max_n_atoms = max(max_n_atoms, g.n_atoms)
+            max_n_bonds = max(max_n_bonds, g.n_bonds)
+            max_n_angles = max(max_n_angles, g.n_angles)
+            max_n_propers = max(max_n_propers, g.n_propers)
+            max_n_impropers = max(max_n_impropers, g.n_impropers)
+        self.max_n_atoms = max_n_atoms * self.batch_size
+        self.max_n_bonds = max_n_bonds * self.batch_size
+        self.max_n_angles = max_n_angles * self.batch_size
+        self.max_n_propers = max_n_propers * self.batch_size
+        self.max_n_impropers = max_n_impropers * self.batch_size
 
     def append(self, _data):
         assert len(_data) == 3
@@ -58,6 +63,8 @@ class PadToConstantDataLoader:
         sum_n_propers = sum(g.n_propers for g in gs)
         sum_n_impropers = sum(g.n_impropers for g in gs)
 
+
+        print(sum_n_atoms, self.max_n_atoms)
         dummy_n_atoms = self.max_n_atoms - sum_n_atoms
         dummy_n_bonds = self.max_n_bonds - sum_n_bonds
         dummy_n_angles = self.max_n_angles - sum_n_angles

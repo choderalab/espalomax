@@ -85,6 +85,7 @@ def run():
     compiled = []
     from concurrent.futures import ThreadPoolExecutor
     with futures.ThreadPoolExecutor() as pool:
+        print(len(pool._threads), flush=True)
         for g, x, u in dataloader.data:
             lowered = step.lower(state, g, x, u)
             compiled.append(pool.submit(lowered.compile))
@@ -97,7 +98,6 @@ def run():
     for idx_batch in tqdm.tqdm(range(100)):
         for idx, (g, x, u) in enumerate(dataloader.data):
             state = compiled[idx](state, g, x, u)
-        save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":
     run()

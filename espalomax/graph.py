@@ -127,8 +127,6 @@ class Graph(NamedTuple):
         heterograph['onefour']['idxs'] =\
             get_onefour_idxs_from_molecule(molecule)
 
-        print(heterograph["improper"]["idxs"].shape)
-
         return heterograph
 
     @classmethod
@@ -241,7 +239,7 @@ def parameters_from_molecule(
 def batch(graphs):
     homographs = jraph.batch([graph.homograph for graph in graphs])
     offsets = homographs.n_node
-    offsets = jnp.concatenate([jnp.array([0]), offsets[:-1]])
+    offsets = jnp.concatenate([jnp.array([0], jnp.int32), offsets[:-1]])
     offsets = jnp.cumsum(offsets)
     heterographs = Heterograph()
 
