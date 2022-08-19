@@ -57,7 +57,6 @@ def get_improper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
 
     improper_torsion_idxs = jnp.array(idx_permuts, dtype=jnp.int32)
     if len(improper_torsion_idxs) == 0:
-        print("fuck")
         improper_torsion_idxs = jnp.zeros((0, 4))
     return improper_torsion_idxs
 

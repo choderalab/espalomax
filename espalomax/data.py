@@ -44,58 +44,25 @@ class PadToConstantDataLoader:
         return self
 
     def __next__(self):
-        sum_n_atoms = 0
-        sum_n_bonds = 0
-        sum_n_angles = 0
-        sum_n_propers = 0
-        sum_n_impropers = 0
-        cache = []
+        if len(self.idxs) < self.batch_size:
+            raise StopIteration
 
-        while True:
-            if len(self.idxs) == 0:
-                raise StopIteration
-            else:
-                idx = self.idxs[-1]
-                g, x, u = self.data[idx]
-                _sum_n_atoms = sum_n_atoms + g.n_atoms
-                _sum_n_bonds = sum_n_bonds + g.n_bonds
-                _sum_n_angles = sum_n_angles + g.n_angles
-                _sum_n_propers = sum_n_propers + g.n_propers
-                _sum_n_impropers = sum_n_impropers + g.n_impropers
+        idxs = self.idxs[:self.batch_size]
+        self.idxs = self.idxs[self.batch_size:]
 
-                if all(
-                    (
-                        _sum_n_atoms <= self.max_n_atoms,
-                        _sum_n_bonds <= self.max_n_bonds,
-                        _sum_n_angles <= self.max_n_angles,
-                        _sum_n_propers <= self.max_n_propers,
-                        _sum_n_impropers <= self.max_n_impropers,
-                    ),
-                ):
-                    sum_n_atoms = _sum_n_atoms
-                    sum_n_bonds = _sum_n_bonds
-                    sum_n_angles = _sum_n_angles
-                    sum_n_propers = _sum_n_propers
-                    sum_n_impropers = _sum_n_impropers
-                    cache.append((g, x, u))
-                    self.idxs.pop()
-
-                else:
-                    sum_n_atoms = 0
-                    sum_n_bonds = 0
-                    sum_n_angles = 0
-                    sum_n_propers = 0
-                    sum_n_impropers = 0
-                    break
-
+        cache = [self.data[idx] for idx in idxs]
+        gs, xs, us = zip(*cache)
+        sum_n_atoms = sum(g.n_atoms for g in gs)
+        sum_n_bonds = sum(g.n_bonds for g in gs)
+        sum_n_angles = sum(g.n_angles for g in gs)
+        sum_n_propers = sum(g.n_propers for g in gs)
+        sum_n_impropers = sum(g.n_impropers for g in gs)
 
         dummy_n_atoms = self.max_n_atoms - sum_n_atoms
         dummy_n_bonds = self.max_n_bonds - sum_n_bonds
         dummy_n_angles = self.max_n_angles - sum_n_angles
         dummy_n_propers = self.max_n_propers - sum_n_propers
         dummy_n_impropers = self.max_n_impropers - sum_n_impropers
-
-        gs, xs, us = zip(*cache)
 
         g_dummy = dummy(
             n_atoms=dummy_n_atoms,

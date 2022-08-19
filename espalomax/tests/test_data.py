@@ -7,7 +7,7 @@ def test_constant_padding():
     for idx in range(1, 6):
         g = esp.Graph.from_smiles("C=C"*idx)
         x = onp.zeros((1, g.n_atoms, 3))
-        u = onp.zeros((1, 1))
+        u = onp.zeros((1, ))
         data.append((g, x, u))
     dataloader = esp.data.PadToConstantDataLoader(data, 2)
     g, x, u, m = next(iter(dataloader))
