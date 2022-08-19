@@ -18,18 +18,19 @@ HARTREE_TO_KCAL_PER_MOL = 627.5
 class DataLoader(object):
     def __init__(self):
         self._prepare()
-    
+  
     def _prepare(self):
         import os
         import pickle
-        paths = os.listdir("data")
-        paths = ["data/" + path for path in paths]
+        base_path = "../data/qca_optimization/data/"
+        paths = os.listdir(base_path)
+        paths = [base_path + path for path in paths]
         data = []
         for path in paths:
             _data = pickle.load(open(path, "rb"))
             data.append(_data)
         self.data = data
-    
+   
     def __iter__(self):
         self.idxs = list(range(len(self.data)))
         random.shuffle(self.idxs)
@@ -44,17 +45,10 @@ class DataLoader(object):
 
         idx = self.idxs.pop()
         g, x, u = self.data[idx]
-        if len(x) != 50:
-            idxs = onp.random.randint(len(x), size=50)
-            x, u = x[idxs], u[idxs]
         return g, x, u
 
 def run():
     dataloader = DataLoader()
-
-    import pickle
-    file_handle = open("data.pkl", "wb")
-    pickle.dump(dataloader, file_handle)
 
     g, _, __ = next(iter(dataloader))
     model = esp.nn.Parametrization(
@@ -86,21 +80,23 @@ def run():
 
     print(len(dataloader))
 
+    import time
+    time0 = time.time()
     compiled = []
     from concurrent.futures import ThreadPoolExecutor
     with futures.ThreadPoolExecutor() as pool:
-        for g, x, u in dataloader:
+        for g, x, u in dataloader.data:
             lowered = step.lower(state, g, x, u)
             compiled.append(pool.submit(lowered.compile))
     compiled = [fn.result() for fn in compiled]
+    time1 = time.time()
 
-    print(compiled, flush=True)
+    print(time1 - time0, flush=True)
 
     import tqdm
     for idx_batch in tqdm.tqdm(range(100)):
-        for g, x, u in dataloader:
-            state = step(state, g, x, u)
-            print(step._cache_size(), flush=True)
+        for idx, (g, x, u) in enumerate(dataloader.data):
+            state = compiled[idx](state, g, x, u)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":

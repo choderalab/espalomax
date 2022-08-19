@@ -127,6 +127,8 @@ class Graph(NamedTuple):
         heterograph['onefour']['idxs'] =\
             get_onefour_idxs_from_molecule(molecule)
 
+        print(heterograph["improper"]["idxs"].shape)
+
         return heterograph
 
     @classmethod
@@ -242,6 +244,7 @@ def batch(graphs):
     offsets = jnp.concatenate([jnp.array([0]), offsets[:-1]])
     offsets = jnp.cumsum(offsets)
     heterographs = Heterograph()
+
     for term in ["bond", "angle", "proper", "improper", "onefour", "nonbonded"]:
         heterographs[term]["idxs"] = jnp.concatenate(
             [

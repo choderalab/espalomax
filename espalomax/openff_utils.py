@@ -6,6 +6,8 @@ def get_bond_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
         [[bond.atom1_index, bond.atom2_index] for bond in molecule.bonds],
         dtype=jnp.int32,
     )
+    if len(bond_idxs) == 0:
+        bond_idxs = jnp.zeros((0, 2))
     return bond_idxs
 
 def get_angle_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -18,7 +20,8 @@ def get_angle_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
         ),
         dtype=jnp.int32,
     )
-
+    if len(angle_idxs) == 0:
+        angle_idxs = jnp.zeros((0, 3))
     return angle_idxs
 
 def get_proper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -31,6 +34,8 @@ def get_proper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
         ),
         dtype=jnp.int32,
     )
+    if len(proper_torsion_idxs) == 0:
+        proper_torsion_idxs = jnp.zeros((0, 4))
     return proper_torsion_idxs
 
 def get_improper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -51,6 +56,9 @@ def get_improper_torsion_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
             idx_permuts.append(tuple(idx))
 
     improper_torsion_idxs = jnp.array(idx_permuts, dtype=jnp.int32)
+    if len(improper_torsion_idxs) == 0:
+        print("fuck")
+        improper_torsion_idxs = jnp.zeros((0, 4))
     return improper_torsion_idxs
 
 def get_nonbonded_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -64,6 +72,8 @@ def get_nonbonded_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
         ),
         axis=-1,
     )
+    if len(nonbonded_idxs) == 0:
+        nonbonded_idxs = jnp.zeros((0, 2))
     return nonbonded_idxs
 
 def get_onefour_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -77,5 +87,6 @@ def get_onefour_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
         ),
         axis=-1,
     )
-
+    if len(onefour_idxs) == 0:
+        onefour_idxs = jnp.zeros((0, 2))
     return onefour_idxs

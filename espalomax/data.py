@@ -108,7 +108,7 @@ class PadToConstantDataLoader:
         )
 
         x_dummy = onp.zeros((1, dummy_n_atoms, 3))
-        u_dummy = onp.zeros((1, 1))
+        u_dummy = onp.zeros((1, ))
 
         gs = gs + (g_dummy,)
         xs = xs + (x_dummy,)
