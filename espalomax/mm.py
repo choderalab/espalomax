@@ -30,7 +30,7 @@ def get_angles(conformations, idxs):
     fn = jax_md.quantity.cosine_angle_between_two_vectors
     for _ in range(len(x0.shape)-1):
         fn = jax.vmap(fn)
-    return fn(x10, x12)
+    return jnp.arccos(fn(x10, x12))
 
 def get_dihedrals(conformations, idxs):
     x1 = conformations[..., idxs[:, 0], :]
@@ -47,9 +47,19 @@ def get_dihedrals(conformations, idxs):
     return fn(x12, x32, x34)
 
 def linear_mixture_energy(x, coefficients, phases):
-    b0, b1 = phases
-    k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
-    return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
+    # b0, b1 = phases
+    # k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
+    # return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
+    k, b = linear_mixture_to_original(coefficients, phases)
+    return k * (x - b) ** 2
+
+def linear_mixture_to_original(coefficients, phases):
+    k1 = jnp.exp(coefficients[..., 0])
+    k2 = jnp.exp(coefficients[..., 1])
+    b1, b2 = phases
+    k = k1 + k2
+    b = (k1 * b1 + k2 * b2) / (k + 1e-7)
+    return k, b
 
 def get_bond_energy(conformations, idxs, coefficients):
     distances = get_distances(conformations, idxs)
@@ -181,3 +191,85 @@ def get_nonbonded_energy(
     energy_fn = jax.vmap(energy_fn, 0)
     u = energy_fn(coordinates)
     return u
+
+def to_jaxmd_mm_energy_fn_parameters(parameters, to_replace=None):
+    from jax_md.mm import (
+        MMEnergyFnParameters,
+        HarmonicBondParameters,
+        HarmonicAngleParameters,
+        PeriodicTorsionParameters,
+    )
+
+    proper_idxs = parameters["proper"]["idxs"]
+    proper_k = parameters["proper"]["k"]
+    improper_idxs = parameters["improper"]["idxs"]
+    improper_k = parameters["improper"]["k"]
+
+    if jnp.size(proper_idxs) == 0:
+        proper_idxs = jnp.zeros((0, 4), jnp.int32)
+        proper_k = jnp.zeros((0, 6), jnp.float32)
+
+    if jnp.size(improper_idxs) == 0:
+        improper_idxs = jnp.zeros((0, 4), jnp.int32)
+        improper_k = jnp.zeros((0, 6), jnp.float32)
+
+    epsilon_bond, length_bond = linear_mixture_to_original(
+            parameters['bond']['coefficients'], BOND_PHASES
+    )
+
+    epsilon_bond = 2.0 * epsilon_bond
+
+    harmonic_bond_parameters = HarmonicBondParameters(
+        particles=parameters['bond']['idxs'],
+        epsilon=epsilon_bond,
+        length=length_bond,
+    )
+
+    epsilon_angle, length_angle = linear_mixture_to_original(
+            parameters['angle']['coefficients'], ANGLE_PHASES,
+    )
+
+    epsilon_angle = 2.0 * epsilon_angle
+
+    harmonic_angle_parameters = HarmonicAngleParameters(
+        particles=parameters['angle']['idxs'],
+        epsilon=epsilon_angle,
+        length=length_angle,
+    )
+
+    periodic_torsion_parameters = PeriodicTorsionParameters(
+        particles=jnp.concatenate(
+            [
+                jnp.repeat(proper_idxs, 6, 0),
+                jnp.repeat(improper_idxs, 6, 0),
+            ],
+        ),
+        amplitude=jnp.concatenate(
+            [
+                proper_k.flatten(),
+                improper_k.flatten(),
+            ],
+        ),
+        periodicity=jnp.tile(
+            jnp.arange(1, 7),
+            len(parameters["proper"]["idxs"]) \
+            + len(parameters["improper"]["idxs"])
+        ),
+        phase=jnp.zeros(
+            6 * len(parameters["proper"]["idxs"]) \
+            + 6 * len(parameters["improper"]["idxs"])
+        ),
+    )
+
+    if to_replace is None:
+        return MMEnergyFnParameters(
+            harmonic_bond_parameters=harmonic_bond_parameters,
+            harmonic_angle_parameters=harmonic_angle_parameters,
+            periodic_torsion_parameters=periodic_torsion_parameters,
+        )
+    else:
+        return to_replace._replace(
+            harmonic_bond_parameters=harmonic_bond_parameters,
+            harmonic_angle_parameters=harmonic_angle_parameters,
+            periodic_torsion_parameters=periodic_torsion_parameters,
+        )
