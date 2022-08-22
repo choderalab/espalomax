@@ -222,3 +222,77 @@ def test_methane_angle_energy_consistency():
     u_jax_md = u_jax_md - u_jax_md.mean(0)
     u_esp = u_esp - u_esp.mean(0)
     assert jnp.allclose(u_jax_md, u_esp)
+
+
+@pytest.mark.parametrize(
+    "smiles", [
+        idx * "C" for idx in range(8)
+    ],
+)
+def test_all_bonded_energy(smiles):
+    from functools import partial
+    from openff.toolkit.topology import Molecule
+    import jax
+    import jax.numpy as jnp
+    import jax_md
+    import espalomax as esp
+    molecule = Molecule.from_smiles(smiles)
+    base_parameters = esp.graph.parameters_from_molecule(molecule)
+    graph = esp.Graph.from_openff_molecule(molecule)
+    coordinates = jax.random.normal(jax.random.PRNGKey(2666), shape=(8, graph.n_atoms, 3))
+    model = esp.nn.Parametrization(
+        representation=esp.nn.GraphAttentionNetwork(8, 3),
+        janossy_pooling=esp.nn.JanossyPooling(8, 3),
+    )
+
+    nn_params = model.init(jax.random.PRNGKey(2666), graph)
+    ff_params_esp = model.apply(nn_params, graph)
+
+    from jax_md.mm import (
+        HarmonicBondParameters,
+        HarmonicAngleParameters,
+        PeriodicTorsionParameters,
+    )
+
+    ff_params_jaxmd = esp.mm.to_jaxmd_mm_energy_fn_parameters(ff_params_esp, base_parameters)
+    ff_params_jaxmd_without_bonded = ff_params_jaxmd._replace(
+        harmonic_bond_parameters=HarmonicBondParameters(
+            particles=ff_params_jaxmd.harmonic_bond_parameters.particles,
+            epsilon=jnp.zeros_like(ff_params_jaxmd.harmonic_bond_parameters.epsilon),
+            length=jnp.zeros_like(ff_params_jaxmd.harmonic_bond_parameters.length),
+        ),
+        harmonic_angle_parameters=HarmonicAngleParameters(
+            particles=ff_params_jaxmd.harmonic_angle_parameters.particles,
+            epsilon=jnp.zeros_like(ff_params_jaxmd.harmonic_angle_parameters.epsilon),
+            length=jnp.zeros_like(ff_params_jaxmd.harmonic_angle_parameters.length),
+        ),
+        periodic_torsion_parameters=PeriodicTorsionParameters(
+            particles=ff_params_jaxmd.periodic_torsion_parameters.particles,
+            amplitude=jnp.zeros_like(ff_params_jaxmd.periodic_torsion_parameters.amplitude),
+            periodicity=ff_params_jaxmd.periodic_torsion_parameters.periodicity,
+            phase=ff_params_jaxmd.periodic_torsion_parameters.phase,
+        ),
+    )
+
+    from jax_md import space
+    displacement_fn, shift_fn = space.free()
+
+    from jax_md.mm import mm_energy_fn
+    energy_fn, _ = mm_energy_fn(
+        displacement_fn, default_mm_parameters=ff_params_jaxmd,
+    )
+
+    energy_fn_without_bonded, _ = mm_energy_fn(
+        displacement_fn, default_mm_parameters=ff_params_jaxmd_without_bonded,
+    )
+
+    u_jax_md = jax.vmap(energy_fn, 0)(coordinates)
+    u_jax_md_without_angle = jax.vmap(energy_fn_without_bonded, 0)(coordinates)
+    u_jax_md = u_jax_md - u_jax_md_without_angle
+
+    get_energy = jax.vmap(esp.mm.get_energy, (None, 0))
+    u_esp = get_energy(ff_params_esp, coordinates)
+
+    u_jax_md = u_jax_md - u_jax_md.mean(0)
+    u_esp = u_esp - u_esp.mean(0)
+    assert jnp.allclose(u_jax_md, u_esp)
