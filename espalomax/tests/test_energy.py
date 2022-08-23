@@ -226,7 +226,7 @@ def test_methane_angle_energy_consistency():
 
 @pytest.mark.parametrize(
     "smiles", [
-        idx * "C" for idx in range(8)
+        idx * "C" for idx in range(1, 10)
     ],
 )
 def test_all_bonded_energy(smiles):

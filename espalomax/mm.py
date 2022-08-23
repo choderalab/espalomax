@@ -179,15 +179,7 @@ def get_nonbonded_energy(
 
     energy_fn, _ = mm_energy_fn(
         displacement_fn, parameters,
-        space_shape=space.free,
-        use_neighbor_list=False,
-        box_size=None,
-        use_multiplicative_isotropic_cutoff=False,
-        use_dsf_coulomb=False,
-        neighbor_kwargs={},
     )
-
-    energy_fn = partial(energy_fn, parameters=parameters)
     energy_fn = jax.vmap(energy_fn, 0)
     u = energy_fn(coordinates)
     return u
