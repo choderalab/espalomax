@@ -59,7 +59,7 @@ def run(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=str, default="gen2")
+    parser.add_argument("--out", type=str, default="gen2.hdf5")
     parser.add_argument(
         "--dataset", type=str, nargs="+",
         default=[
