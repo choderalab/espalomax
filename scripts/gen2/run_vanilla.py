@@ -82,6 +82,7 @@ def run():
     for idx_batch in tqdm.tqdm(range(100)):
         for g, x, u in dataloader:
             state = step(state, g, x, u)
+            save_checkpoint("_checkpoint", state, idx_batch)
 
 if __name__ == "__main__":
     run()

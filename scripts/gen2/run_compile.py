@@ -16,13 +16,16 @@ HARTREE_TO_KCAL_PER_MOL = 627.5
 
 
 class DataLoader(object):
-    def __init__(self):
+    def __init__(self, path, partition="train", seed=2666):
+        self.path = path
+        self.partition = partition
         self._prepare()
   
     def _prepare(self):
         import os
         import pickle
-        base_path = "../data/qca_optimization/data/"
+        # base_path = "../data/qca_optimization/data/"
+        base_path = self.path
         paths = os.listdir(base_path)
         paths = [base_path + path for path in paths]
         data = []
@@ -30,9 +33,19 @@ class DataLoader(object):
             _data = pickle.load(open(path, "rb"))
             data.append(_data)
         self.data = data
+        idxs = list(range(len(self.data)))
+        import random
+        random.shuffle(idxs)
+        n_te = int(0.1 * len(idxs))
+        if self.partition == "train":
+            self.idxs = idxs[:int(0.8 * n_te)]
+        elif self.partition == "valid":
+            self.idxs = idxs[int(0.8 * n_te) : int(0.9 * n_te)]
+        elif self.partition == "test":
+            self.idxs = idxs[int(0.9 * n_te):]
+
    
     def __iter__(self):
-        self.idxs = list(range(len(self.data)))
         random.shuffle(self.idxs)
         return self
 
@@ -48,7 +61,7 @@ class DataLoader(object):
         return g, x, u
 
 def run():
-    dataloader = DataLoader()
+    dataloader = DataLoader(path="../data/qca_optimization/data/")
 
     g, _, __ = next(iter(dataloader))
     model = esp.nn.Parametrization(
@@ -59,6 +72,8 @@ def run():
     def get_loss(nn_params, g, x, u):
         ff_params = model.apply(nn_params, g)
         u_hat = esp.mm.get_energy(ff_params, x)
+        u_hat = u_hat - u_hat.mean(0, keepdims=True)
+        u = u - u.mean(0, keepdims=True)
         return jnp.abs(u - u_hat).mean()
 
     @jax.jit
@@ -70,6 +85,7 @@ def run():
 
     import optax
     optimizer = optax.adam(1e-3)
+    optimizer = optax.apply_if_finite(optimizer, 5)
 
     nn_params = model.init(jax.random.PRNGKey(2666), g)
     from flax.training.train_state import TrainState
@@ -78,26 +94,32 @@ def run():
          apply_fn=model.apply, params=nn_params, tx=optimizer,
     )
 
-    print(len(dataloader))
 
     import time
     time0 = time.time()
     compiled = []
+
     from concurrent.futures import ThreadPoolExecutor
     with futures.ThreadPoolExecutor() as pool:
-        print(len(pool._threads), flush=True)
         for g, x, u in dataloader.data:
             lowered = step.lower(state, g, x, u)
             compiled.append(pool.submit(lowered.compile))
     compiled = [fn.result() for fn in compiled]
+    
     time1 = time.time()
 
     print(time1 - time0, flush=True)
 
     import tqdm
-    for idx_batch in tqdm.tqdm(range(100)):
-        for idx, (g, x, u) in enumerate(dataloader.data):
+    import random
+    for idx_batch in tqdm.tqdm(range(50000)):
+        idxs = list(range(len(dataloader.data)))
+        random.shuffle(idxs)
+        for idx in idxs:
+            g, x, u = dataloader.data[idx]
             state = compiled[idx](state, g, x, u)
+            assert state.opt_state.notfinite_count <= 10
+        save_checkpoint("_checkpoint", state, idx_batch)
 
 if __name__ == "__main__":
     run()
