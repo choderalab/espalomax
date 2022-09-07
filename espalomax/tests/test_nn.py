@@ -1,13 +1,21 @@
 import pytest
 
-def test_gat():
+# def test_gat():
+#     import jax
+#     import espalomax as esp
+#     model = esp.nn.GraphAttentionNetwork(8, 3)
+#     graph = esp.Graph.from_smiles("C").homograph
+#     params = model.init(jax.random.PRNGKey(2666), graph)
+#     graph = model.apply(params, graph)
+#     assert graph.nodes.shape == (5, 8)
+
+def test_graph_sage():
     import jax
     import espalomax as esp
-    model = esp.nn.GraphAttentionNetwork(8, 3)
+    model = esp.nn.GraphSageModel(8, 3)
     graph = esp.Graph.from_smiles("C").homograph
     params = model.init(jax.random.PRNGKey(2666), graph)
     graph = model.apply(params, graph)
-    assert graph.nodes.shape == (5, 8)
 
 def test_janossy():
     import jax
@@ -25,12 +33,12 @@ def test_parametrization():
     import espalomax as esp
     graph = esp.Graph.from_smiles("C")
     model = esp.nn.Parametrization(
-        representation=esp.nn.GraphAttentionNetwork(8, 3),
+        representation=esp.nn.GraphSageModel(8, 3),
         janossy_pooling=esp.nn.JanossyPooling(8, 3),
     )
     nn_params = model.init(jax.random.PRNGKey(2666), graph)
     ff_params = model.apply(nn_params, graph)
-    ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params)
+    ff_params = esp.mm.to_jaxmd_mm_energy_fn_parameters(ff_params)
 
 def test_parametrization_with_replacement():
     import jax
@@ -42,11 +50,11 @@ def test_parametrization_with_replacement():
     base_parameters = esp.graph.parameters_from_molecule(molecule)
 
     model = esp.nn.Parametrization(
-        representation=esp.nn.GraphAttentionNetwork(8, 3),
+        representation=esp.nn.GraphSageModel(8, 3),
         janossy_pooling=esp.nn.JanossyPooling(8, 3),
     )
     nn_params = model.init(jax.random.PRNGKey(2666), graph)
     ff_params = model.apply(nn_params, graph)
-    ff_params = esp.nn.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
+    ff_params = esp.mm.to_jaxmd_mm_energy_fn_parameters(ff_params, base_parameters)
     from jax_md.mm import check_parameters
     check_parameters(ff_params)

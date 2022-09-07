@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import linen as nn
 from .graph import Graph, Heterograph
 from jraph import GAT
+from jraph import segment_mean
 
 IMPROPER_PERMUTATIONS = [(0, 1, 2, 3), (0, 2, 3, 1), (0, 3, 1, 2)]
 JANOSSY_POOLING_PARAMETERS = {
@@ -17,6 +18,39 @@ JANOSSY_POOLING_PARAMETERS = {
 import math
 BOND_PHASES = (0.00, 1.0)
 ANGLE_PHASES = (0.0, math.pi)
+
+class GraphSageLayer(nn.Module):
+    hidden_features: int
+
+    @nn.compact
+    def __call__(self, graph):
+        nodes, edges, receivers, senders, _, _, _ = graph
+        total_num_nodes = nodes.shape[0]
+        h_e = segment_mean(
+            nodes[senders],
+            receivers,
+            total_num_nodes,
+        )
+        nodes = jnp.concatenate([nodes, h_e], -1)
+        nodes = nn.Dense(self.hidden_features)(nodes)
+        nodes = jax.nn.relu(nodes)
+        return graph._replace(nodes=nodes)
+
+
+class GraphSageModel(nn.Module):
+    hidden_features: int
+    depth: int
+
+    def setup(self):
+        layers = []
+        for idx_depth in range(self.depth):
+            layers.append(
+                GraphSageLayer(self.hidden_features)
+            )
+        self.layers = nn.Sequential(layers)
+
+    def __call__(self, graph):
+        return self.layers(graph)
 
 class AttentionQueryFn(nn.Module):
     hidden_features: int

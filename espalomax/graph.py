@@ -3,6 +3,7 @@ from openff.toolkit.topology import Molecule
 from jraph import GraphsTuple
 import jax
 import jax.numpy as jnp
+from .openff_utils import canonical_featurizer
 from collections import defaultdict
 from functools import partial
 import jraph
@@ -58,9 +59,7 @@ class Graph(NamedTuple):
 
         """
         # get nodes
-        nodes = [atom.atomic_number for atom in molecule.atoms]
-        nodes = jnp.array(nodes)
-        nodes = jax.nn.one_hot(nodes, 118)  # TODO: use more features
+        nodes = canonical_featurizer(molecule)
 
         # get bonds
         senders = []

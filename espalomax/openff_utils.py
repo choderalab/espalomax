@@ -1,4 +1,5 @@
 from openff.toolkit.topology import Molecule
+import jax
 import jax.numpy as jnp
 
 def get_bond_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
@@ -89,3 +90,65 @@ def get_onefour_idxs_from_molecule(molecule: Molecule) -> jnp.ndarray:
     if len(onefour_idxs) == 0:
         onefour_idxs = jnp.zeros((0, 2), jnp.int32)
     return onefour_idxs
+
+def canonical_featurizer(molecule: Molecule) -> jnp.ndarray:
+    def fp(atom):
+        from rdkit import Chem
+        HYBRIDIZATION_RDKIT = {
+            Chem.rdchem.HybridizationType.SP: jnp.array(
+                [1, 0, 0, 0, 0],
+                dtype=jnp.float32,
+            ),
+            Chem.rdchem.HybridizationType.SP2: jnp.array(
+                [0, 1, 0, 0, 0],
+                dtype=jnp.float32,
+            ),
+            Chem.rdchem.HybridizationType.SP3: jnp.array(
+                [0, 0, 1, 0, 0],
+                dtype=jnp.float32,
+            ),
+            Chem.rdchem.HybridizationType.SP3D: jnp.array(
+                [0, 0, 0, 1, 0],
+                dtype=jnp.float32,
+            ),
+            Chem.rdchem.HybridizationType.SP3D2: jnp.array(
+                [0, 0, 0, 0, 1],
+                dtype=jnp.float32,
+            ),
+            Chem.rdchem.HybridizationType.S: jnp.array(
+                [0, 0, 0, 0, 0],
+                dtype=jnp.float32,
+            ),
+        }
+        return jnp.concatenate(
+            [
+                jnp.array(
+                    [
+                        atom.GetTotalDegree(),
+                        atom.GetTotalValence(),
+                        atom.GetExplicitValence(),
+                        atom.GetFormalCharge(),
+                        atom.GetIsAromatic() * 1.0,
+                        atom.GetMass(),
+                        atom.IsInRingSize(3) * 1.0,
+                        atom.IsInRingSize(4) * 1.0,
+                        atom.IsInRingSize(5) * 1.0,
+                        atom.IsInRingSize(6) * 1.0,
+                        atom.IsInRingSize(7) * 1.0,
+                        atom.IsInRingSize(8) * 1.0,
+                    ],
+                    dtype=jnp.float32,
+                ),
+                HYBRIDIZATION_RDKIT[atom.GetHybridization()],
+            ],
+            axis=0,
+        )
+
+    nodes = [atom.atomic_number for atom in molecule.atoms]
+    nodes = jnp.array(nodes)
+    nodes = jax.nn.one_hot(nodes, 100)  # TODO: use more features
+    nodes_fp = jnp.stack(
+        [fp(atom) for atom in molecule.to_rdkit().GetAtoms()], axis=0
+    )
+    nodes = jnp.concatenate([nodes, nodes_fp], -1)
+    return nodes
