@@ -31,8 +31,10 @@ class GraphSageLayer(nn.Module):
             receivers,
             total_num_nodes,
         )
-        nodes = jnp.concatenate([nodes, h_e], -1)
+
+        h_e = nn.Dense(self.hidden_features)(h_e)
         nodes = nn.Dense(self.hidden_features)(nodes)
+        nodes = nodes + h_e
         nodes = jax.nn.relu(nodes)
         return graph._replace(nodes=nodes)
 
