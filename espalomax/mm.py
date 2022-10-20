@@ -1,4 +1,4 @@
-from typing import Mapping, Optional
+from typing import Mapping, Optional, List
 from functools import partial
 from openff.toolkit.topology import Molecule
 import jax
@@ -78,6 +78,7 @@ def get_energy(
     conformations: jnp.ndarray,
     mask: Optional[jnp.ndarray] = None,
     batch_size: Optional[int] = None,
+    terms: List[str] = ["bond", "angle", "proper", "improper"],
 ):
     """Compute the energy given a set of parameters and conformations.
 
@@ -147,7 +148,18 @@ def get_energy(
         proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0), num_segments=batch_size+1)
         improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0), num_segments=batch_size+1)
 
-    return bond_energy + angle_energy + proper_energy + improper_energy
+    total_energy = 0.0
+
+    if "bond" in terms:
+        total_energy = total_energy + bond_energy
+    if "angle" in terms:
+        total_energy = total_energy + angle_energy
+    if "proper" in terms:
+        total_energy = total_energy + proper_energy
+    if "improper" in terms:
+        total_energy = total_energy + improper_energy
+
+    return total_energy
 
 def get_nonbonded_energy(
     molecule: Molecule,
