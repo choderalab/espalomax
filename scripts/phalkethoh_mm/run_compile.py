@@ -49,6 +49,7 @@ class DataLoader(object):
 
    
     def __iter__(self):
+        self.idxs = list(range(len(self.data)))
         random.shuffle(self.idxs)
         return self
 
@@ -65,6 +66,7 @@ class DataLoader(object):
 
 def run():
     dataloader = DataLoader(path="data/", partition="all")
+    print(dataloader.idxs)
 
     g, _, __ = next(iter(dataloader))
     model = esp.nn.Parametrization(
@@ -75,7 +77,7 @@ def run():
 
     def get_loss(nn_params, g, x, u):
         ff_params = model.apply(nn_params, g)
-        u_hat = esp.mm.get_energy(ff_params, x)
+        u_hat = esp.mm.get_energy(ff_params, x, terms=["bond", "angle"])
         u_hat = u_hat - u_hat.mean(0, keepdims=True)
         u = u - u.mean(0, keepdims=True)
         return ((u - u_hat) ** 2).mean()
@@ -125,15 +127,10 @@ def run():
     print(time1 - time0, flush=True)
     '''
 
-    idxs = tuple(dataloader.idxs)
-
     import tqdm
     import random
-    for idx_batch in range(50000):
-        _idxs = list(idxs)
-        random.shuffle(_idxs)
-        for idx in _idxs:
-            g, x, u = dataloader.data[idx]
+    for idx_batch in range(10000):
+        for g, x, u in dataloader:
             # key = (g.n_atoms, g.n_bonds, g.n_angles, g.n_propers, g.n_impropers, x.shape[0])
             # state = compiled[key](state, g, x, u)
             state = step(state, g, x, u)
