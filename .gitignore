@@ -140,3 +140,5 @@ parm_at_Frosst.tgz
 
 # data
 *.hdf5
+*.zip
+*.pkl
