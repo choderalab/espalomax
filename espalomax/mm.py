@@ -47,11 +47,9 @@ def get_dihedrals(conformations, idxs):
     return fn(x12, x32, x34)
 
 def linear_mixture_energy(x, coefficients, phases):
-    # b0, b1 = phases
-    # k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
-    # return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
-    k, b = linear_mixture_to_original(coefficients, phases)
-    return k * (x - b) ** 2
+    b0, b1 = phases
+    k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
+    return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
 
 def linear_mixture_to_original(coefficients, phases):
     k1 = jnp.exp(coefficients[..., 0])
