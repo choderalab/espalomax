@@ -82,7 +82,7 @@ def run():
         u = u - u.mean(0, keepdims=True)
         return ((u - u_hat) ** 2).mean()
 
-    @jax.jit
+    # @jax.jit
     def step(state, g, x, u):
         nn_params = state.params
         grads = jax.grad(get_loss)(nn_params, g, x, u)
@@ -93,10 +93,10 @@ def run():
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
-        optax.adam(learning_rate=1e-4),
+        optax.adam(learning_rate=1e-3),
     )
 
-    nn_params = model.init(jax.random.PRNGKey(2666), g)
+    nn_params = model.init(jax.random.PRNGKey(2667), g)
     from flax.training.train_state import TrainState
     from flax.training.checkpoints import save_checkpoint
     state = TrainState.create(
@@ -134,8 +134,10 @@ def run():
             # key = (g.n_atoms, g.n_bonds, g.n_angles, g.n_propers, g.n_impropers, x.shape[0])
             # state = compiled[key](state, g, x, u)
             state = step(state, g, x, u)
+            ff_params = model.apply(state.params, g)
+            print(ff_params["bond"]["coefficients"][0])
             print(get_loss(state.params, g, x, u))
-        save_checkpoint("__checkpoint", state, idx_batch, keep_every_n_steps=10)
+        save_checkpoint("__checkpoint", state, idx_batch)
 
 if __name__ == "__main__":
     run()

@@ -8,7 +8,7 @@ BOHR_TO_NM = 0.0529177
 HARTREE_TO_KCAL_PER_MOL = 627.5
 
 def run(idx):
-
+    '''
     lines = open("AlkEthOH_chain.smi").readlines()\
             + open("AlkEthOH_rings.smi").readlines()\
             + open("PhEthOH.smi").readlines()
@@ -16,6 +16,8 @@ def run(idx):
     lines = [line.split(" ")[0] for line in lines]
     print(len(lines))
     line = lines[idx]
+    '''
+    line = "C"
 
     g = esp.Graph(line)
     gx = espx.Graph.from_openff_molecule(g.mol)
