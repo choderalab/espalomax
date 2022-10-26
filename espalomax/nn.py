@@ -16,7 +16,7 @@ JANOSSY_POOLING_PARAMETERS = {
 }
 
 import math
-BOND_PHASES = (0.00, 10.0)
+BOND_PHASES = (0.00, 1.0)
 ANGLE_PHASES = (0.0, math.pi)
 
 class GraphSageLayer(nn.Module):

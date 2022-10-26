@@ -109,8 +109,6 @@ def get_energy(
         coefficients=parameters["bond"]["coefficients"],
     )
 
-    return bond_energy.sum(-1)
-
     angle_energy = get_angle_energy(
         conformations,
         idxs=parameters["angle"]["idxs"],
