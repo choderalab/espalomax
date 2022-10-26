@@ -139,10 +139,20 @@ class JanossyPooling(nn.Module):
             setattr(self, "d_%s" % out_feature, layers)
 
             for parameter, dimension in self.out_features[out_feature].items():
-                setattr(
-                    self, "d_%s_%s" % (out_feature, parameter),
-                    nn.Dense(dimension),
-                )
+                if "coefficients" in parameter:
+                    setattr(
+                        self, "d_%s_%s" % (out_feature, parameter),
+                        nn.Dense(
+                            dimension,
+                            bias_init=jax.nn.initializers.constant(-5.0),
+                        ),
+                    )
+
+                else:
+                    setattr(
+                        self, "d_%s_%s" % (out_feature, parameter),
+                        nn.Dense(dimension),
+                    )
 
     def __call__(self, heterograph: Heterograph, nodes: jnp.ndarray):
         parameters = Heterograph()
@@ -180,9 +190,17 @@ class JanossyPooling(nn.Module):
 class Parametrization(nn.Module):
     representation: Callable
     janossy_pooling: Callable
+    #
+    # def setup(self):
+    #     self.coeff = self.param(
+    #         "coeff",
+    #         nn.zeros,
+    #         (),
+    #     )
 
     def __call__(self, graph):
         homograph, heterograph = graph.homograph, graph.heterograph
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
+        # parameters["bond"]["coefficients"] = self.coeff * jnp.ones_like(parameters["bond"]["coefficients"])
         return parameters

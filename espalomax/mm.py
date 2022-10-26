@@ -1,6 +1,7 @@
 from typing import Mapping, Optional, List
 from functools import partial
 from openff.toolkit.topology import Molecule
+import numpy as onp
 import jax
 import jax.numpy as jnp
 import jax_md
@@ -49,7 +50,9 @@ def get_dihedrals(conformations, idxs):
 def linear_mixture_energy(x, coefficients, phases):
     b0, b1 = phases
     k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
+    # k0 = k1 = 0.5 * (k0 + k1)
     return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
+
 
 def linear_mixture_to_original(coefficients, phases):
     k1 = jnp.exp(coefficients[..., 0])
@@ -105,6 +108,8 @@ def get_energy(
         idxs=parameters["bond"]["idxs"],
         coefficients=parameters["bond"]["coefficients"],
     )
+
+    return bond_energy.sum(-1)
 
     angle_energy = get_angle_energy(
         conformations,
