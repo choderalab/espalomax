@@ -53,7 +53,6 @@ def linear_mixture_energy(x, coefficients, phases):
     # k0 = k1 = 0.5 * (k0 + k1)
     return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
 
-
 def linear_mixture_to_original(coefficients, phases):
     k1 = jnp.exp(coefficients[..., 0])
     k2 = jnp.exp(coefficients[..., 1])
@@ -61,6 +60,12 @@ def linear_mixture_to_original(coefficients, phases):
     k = k1 + k2
     b = (k1 * b1 + k2 * b2) / (k + 1e-7)
     return k, b
+
+def original_to_linear_mixture(k, b, phases):
+    b1, b2 = phases
+    k1 = jnp.log(k * (b - b2) / (b1 - b2))
+    k2 = jnp.log(k * (b - b1) / (b2 - b1))
+    return jnp.stack([k1, k2], -1)
 
 def get_bond_energy(conformations, idxs, coefficients):
     distances = get_distances(conformations, idxs)
@@ -142,7 +147,10 @@ def get_energy(
     )
 
     if mask is None:
-        return bond_energy.sum(-1) + angle_energy.sum(-1) + proper_energy.sum(-1) + improper_energy.sum(-1)
+        bond_energy =  bond_energy.sum(-1)
+        angle_energy = angle_energy.sum(-1)
+        proper_energy = proper_energy.sum(-1)
+        improper_energy = improper_energy.sum(-1)
     else:
         bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"], num_segments=batch_size+1)
         angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"], num_segments=batch_size+1)
