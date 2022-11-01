@@ -179,12 +179,12 @@ def get_nonbonded_energy(
         harmonic_bond_parameters=HarmonicBondParameters(
             particles=parameters.harmonic_bond_parameters.particles,
             epsilon=jnp.zeros_like(parameters.harmonic_bond_parameters.epsilon),
-            length=jnp.zeros_like(parameters.harmonic_bond_parameters.length),
+            length=parameters.harmonic_bond_parameters.length,
         ),
         harmonic_angle_parameters=HarmonicAngleParameters(
             particles=parameters.harmonic_angle_parameters.particles,
             epsilon=jnp.zeros_like(parameters.harmonic_angle_parameters.epsilon),
-            length=jnp.zeros_like(parameters.harmonic_angle_parameters.length),
+            length=parameters.harmonic_angle_parameters.length,
         ),
         periodic_torsion_parameters=PeriodicTorsionParameters(
             particles=parameters.periodic_torsion_parameters.particles,
