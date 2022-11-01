@@ -191,17 +191,15 @@ class Parametrization(nn.Module):
     representation: Callable
     janossy_pooling: Callable
 
-    def setup(self):
-        self.coeff = self.param(
-            "coeff",
-            nn.zeros,
-            (7, 2),
-        )
+    # def setup(self):
+    #     self.coeff = self.param(
+    #         "coeff",
+    #         nn.zeros,
+    #         (7, 2),
+    #     )
 
     def __call__(self, graph):
         homograph, heterograph = graph.homograph, graph.heterograph
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
-        # parameters["bond"]["coefficients"] = self.coeff * jnp.ones_like(parameters["bond"]["coefficients"])
-        parameters["bond"]["coefficients"] = self.coeff + 0.0
         return parameters

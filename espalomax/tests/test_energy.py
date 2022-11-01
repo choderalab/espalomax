@@ -205,7 +205,6 @@ def test_methane_angle_energy_consistency():
     energy_fn, _ = mm_energy_fn(
         displacement_fn, default_mm_parameters=ff_params_jaxmd,
     )
-
     energy_fn(coordinates[0])
 
     energy_fn_without_angle, _ = mm_energy_fn(
