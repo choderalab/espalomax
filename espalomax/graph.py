@@ -62,8 +62,9 @@ class Graph(NamedTuple):
         nodes = canonical_featurizer(molecule)
 
         # get bonds
-        senders = []
-        receivers = []
+        senders = [] # list(range(len(nodes)))
+        receivers = [] # list(range(len(nodes)))
+
         for bond in molecule.bonds:
             senders.append(bond.atom1_index)
             receivers.append(bond.atom2_index)

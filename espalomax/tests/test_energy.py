@@ -161,7 +161,7 @@ def test_nitrogen_gas_bond_energy_consistency():
     u_jax_md = u_jax_md - u_jax_md.mean(0)
     u_esp = u_esp - u_esp.mean(0)
 
-    assert jnp.allclose(u_jax_md, u_esp)
+    assert jnp.allclose(u_jax_md, u_esp, rtol=1e-2, atol=1e-2)
 
 def test_methane_angle_energy_consistency():
     from functools import partial
@@ -220,7 +220,7 @@ def test_methane_angle_energy_consistency():
 
     u_jax_md = u_jax_md - u_jax_md.mean(0)
     u_esp = u_esp - u_esp.mean(0)
-    assert jnp.allclose(u_jax_md, u_esp)
+    assert jnp.allclose(u_jax_md, u_esp, rtol=1e-2, atol=1e-2)
 
 
 @pytest.mark.parametrize(
@@ -294,4 +294,4 @@ def test_all_bonded_energy(smiles):
 
     u_jax_md = u_jax_md - u_jax_md.mean(0)
     u_esp = u_esp - u_esp.mean(0)
-    assert jnp.allclose(u_jax_md, u_esp)
+    assert jnp.allclose(u_jax_md, u_esp, rtol=1e-2, atol=1e-2)
