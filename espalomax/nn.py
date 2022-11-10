@@ -199,5 +199,6 @@ class Parametrization(nn.Module):
         homograph, heterograph = graph.homograph, graph.heterograph
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
+
         # parameters["bond"]["coefficients"] = self.coeff + 0.0
         return parameters
