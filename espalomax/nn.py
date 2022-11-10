@@ -32,12 +32,9 @@ class GraphSageLayer(nn.Module):
             total_num_nodes,
         )
 
-        h_e = nn.Dense(self.hidden_features)(h_e)
-        nodes = nn.Dense(self.hidden_features)(nodes)
-        nodes = nodes + h_e
+        nodes = nn.Dense(self.hidden_features)(jnp.concatenate([h_e, nodes], -1))
         nodes = jax.nn.relu(nodes)
         return graph._replace(nodes=nodes)
-
 
 class GraphSageModel(nn.Module):
     hidden_features: int
@@ -62,7 +59,7 @@ class AttentionQueryFn(nn.Module):
         return jnp.expand_dims(nn.Dense(self.hidden_features)(nodes), -1)
 
 class AttentionLogitFn(nn.Module):
-    n_heads: int=4
+    n_heads: int=1
 
     @nn.compact
     def __call__(self, sent_attributes, recived_attributes, edges=None):
@@ -195,11 +192,12 @@ class Parametrization(nn.Module):
     #     self.coeff = self.param(
     #         "coeff",
     #         nn.zeros,
-    #         (7, 2),
+    #         (4, 2),
     #     )
 
     def __call__(self, graph):
         homograph, heterograph = graph.homograph, graph.heterograph
         homograph = self.representation(homograph)
         parameters = self.janossy_pooling(heterograph, homograph.nodes)
+        # parameters["bond"]["coefficients"] = self.coeff + 0.0
         return parameters

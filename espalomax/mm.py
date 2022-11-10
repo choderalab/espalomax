@@ -50,7 +50,10 @@ def get_dihedrals(conformations, idxs):
 def linear_mixture_energy(x, coefficients, phases):
     b0, b1 = phases
     k0, k1 = jnp.exp(coefficients[..., 0]), jnp.exp(coefficients[..., 1])
+
+    # k0, k1 = jax.nn.softplus(coefficients[..., 0]), jax.nn.softplus(coefficients[..., 1])
     # k0 = k1 = 0.5 * (k0 + k1)
+    # print(coefficients.shape, k0.shape, x.shape)
     return k0 * (x - b0) ** 2 + k1 * (x - b1) ** 2
 
 def linear_mixture_to_original(coefficients, phases):
@@ -100,6 +103,7 @@ def get_energy(
     improper_idxs = parameters["improper"]["idxs"]
     improper_k = parameters["improper"]["k"]
 
+
     if jnp.size(proper_idxs) == 0:
         proper_idxs = jnp.zeros((0, 4), jnp.int32)
         proper_k = jnp.zeros((0, 6), jnp.float32)
@@ -108,64 +112,75 @@ def get_energy(
         improper_idxs = jnp.zeros((0, 4), jnp.int32)
         improper_k = jnp.zeros((0, 6), jnp.float32)
 
-    bond_energy = get_bond_energy(
-        conformations,
-        idxs=parameters["bond"]["idxs"],
-        coefficients=parameters["bond"]["coefficients"],
-    )
+    if "bond" in terms:
+        bond_energy = get_bond_energy(
+            conformations,
+            idxs=parameters["bond"]["idxs"],
+            coefficients=parameters["bond"]["coefficients"],
+        )
 
-    angle_energy = get_angle_energy(
-        conformations,
-        idxs=parameters["angle"]["idxs"],
-        coefficients=parameters["angle"]["coefficients"],
-    )
+    if "angle" in terms:
+        angle_energy = get_angle_energy(
+            conformations,
+            idxs=parameters["angle"]["idxs"],
+            coefficients=parameters["angle"]["coefficients"],
+        )
 
-    proper_energy = get_torsion_energy(
-        conformations,
-        idxs=jnp.repeat(proper_idxs, 6, 0),
-        amplitude=proper_k.flatten(),
-        periodicity=jnp.tile(
-            jnp.arange(1, 7),
-            len(parameters["proper"]["idxs"])
-        ),
-        phase=jnp.zeros(
-            6 * len(parameters["proper"]["idxs"])
-        ),
-    )
+    if "proper" in terms:
+        proper_energy = get_torsion_energy(
+            conformations,
+            idxs=jnp.repeat(proper_idxs, 6, 0),
+            amplitude=proper_k.flatten(),
+            periodicity=jnp.tile(
+                jnp.arange(1, 7),
+                len(parameters["proper"]["idxs"])
+            ),
+            phase=jnp.zeros(
+                6 * len(parameters["proper"]["idxs"])
+            ),
+        )
 
-    improper_energy = get_torsion_energy(
-        conformations,
-        idxs=jnp.repeat(improper_idxs, 6, 0),
-        amplitude=improper_k.flatten(),
-        periodicity=jnp.tile(
-            jnp.arange(1, 7),
-            len(parameters["improper"]["idxs"])
-        ),
-        phase=jnp.zeros(
-            6 * len(parameters["improper"]["idxs"])
-        ),
-    )
-
-    if mask is None:
-        bond_energy =  bond_energy.sum(-1)
-        angle_energy = angle_energy.sum(-1)
-        proper_energy = proper_energy.sum(-1)
-        improper_energy = improper_energy.sum(-1)
-    else:
-        bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"], num_segments=batch_size+1)
-        angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"], num_segments=batch_size+1)
-        proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0), num_segments=batch_size+1)
-        improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0), num_segments=batch_size+1)
+    if "improper" in terms:
+        improper_energy = get_torsion_energy(
+            conformations,
+            idxs=jnp.repeat(improper_idxs, 6, 0),
+            amplitude=improper_k.flatten(),
+            periodicity=jnp.tile(
+                jnp.arange(1, 7),
+                len(parameters["improper"]["idxs"])
+            ),
+            phase=jnp.zeros(
+                6 * len(parameters["improper"]["idxs"])
+            ),
+        )
 
     total_energy = 0.0
 
     if "bond" in terms:
+        if mask is None:
+            bond_energy =  bond_energy.sum(-1)
+        else:
+            bond_energy = jax.ops.segment_sum(bond_energy.swapaxes(0, -1), mask["bond"]["mask"], num_segments=batch_size+1)
         total_energy = total_energy + bond_energy
+
     if "angle" in terms:
+        if mask is None:
+            angle_energy = angle_energy.sum(-1)
+        else:
+            angle_energy = jax.ops.segment_sum(angle_energy.swapaxes(0, -1), mask["angle"]["mask"], num_segments=batch_size+1)
         total_energy = total_energy + angle_energy
     if "proper" in terms:
+        if mask is None:
+            proper_energy = proper_energy.sum(-1)
+        else:
+            proper_energy = jax.ops.segment_sum(proper_energy.swapaxes(0, -1), jnp.repeat(mask["proper"]["mask"], 6, 0), num_segments=batch_size+1)
         total_energy = total_energy + proper_energy
     if "improper" in terms:
+        if mask is None:
+            improper_energy = improper_energy.sum(-1)
+        else:
+            improper_energy = jax.ops.segment_sum(improper_energy.swapaxes(0, -1), jnp.repeat(mask["improper"]["mask"], 6, 0), num_segments=batch_size+1)
+
         total_energy = total_energy + improper_energy
 
     return total_energy
