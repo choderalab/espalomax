@@ -224,8 +224,8 @@ def parameters_from_molecule(
         Resulting parameters.
     """
     from openff.toolkit.typing.engines.smirnoff import ForceField
-    # molecule.assign_partial_charges("am1bcc")
-    molecule.assign_partial_charges("zeros")
+    molecule.assign_partial_charges("am1bcc")
+    # molecule.assign_partial_charges("zeros")
     forcefield = ForceField(base_forcefield)
     system = forcefield.create_openmm_system(
         molecule.to_topology(),
