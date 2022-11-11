@@ -41,6 +41,7 @@ def test_training():
     nn_params = model.init(jax.random.PRNGKey(2666), graph)
 
     parameters  = esp.graph.parameters_from_molecule(molecule)
+        
     from jax_md import space
     displacement_fn, shift_fn = space.free()
 
@@ -49,18 +50,39 @@ def test_training():
         displacement_fn, default_mm_parameters=parameters,
     )
 
-    def f(x, t, flow_params):
+    from diffrax import diffeqsolve, ODETerm, Dopri5
+
+    def f(t, x, flow_params):
         ff_params = esp.flow.eval_polynomial(t, flow_params)
-        f_esp = jax.grad(esp.mm.get_energy, 1)(ff_params, x)
+        f_esp = jax.vmap(jax.grad(esp.mm.get_energy, 1), (None, 0))(ff_params, x)
         return f_esp
 
-    def loss(x, nn_params):
+    term = ODETerm(f)
+    solver = Dopri5()
+
+    def loss(nn_params, x):
         flow_params = model.apply(nn_params, graph)
-        print(flow_params)
-        y = odeint(f, x, jnp.array([0.0, 1.0]), flow_params)
-        u = energy_fn(y)
+        flow_params = esp.flow.constraint_polynomial_parameters(flow_params)
+        y = diffeqsolve(term, solver, args=flow_params, t0=0.0, t1=1.0,  dt0=0.1, y0=x, max_steps=1000).ys[-1]
+        u = jax.vmap(energy_fn)(y).mean()
+        jax.debug.print("{x}", x=u)
         return u
 
+    @jax.jit
+    def step(state, x):
+        grads = jax.grad(loss)(state.params, x)
+        state = state.apply_gradients(grads=grads)
+        return state
+
+    
+    import optax
+    tx = optax.adamw(1e-5)
+    from flax.training.train_state import TrainState
+    state = TrainState.create(apply_fn=model.apply, params=nn_params, tx=tx) 
     key = jax.random.PRNGKey(2666)
-    x = jax.random.normal(key, shape=(8, 3))
-    loss(x, nn_params)
+    for _ in range(10000):
+        this_key, key = jax.random.split(key)
+        x = jax.random.normal(key, shape=(10, 8, 3))
+        state = step(state, x)
+
+test_training()

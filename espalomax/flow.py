@@ -23,6 +23,18 @@ def get_polynomial_parameters(
         for key_out, value_out in janossy_pooling_parameters.items()
     }
 
+def constraint_polynomial_parameters(
+    polynomial_parameters: dict,
+):
+    return {
+        key_out: {
+            key_in: jax.nn.log_softmax(value_in) if key_in == "coefficients" else 
+                    jax.nn.tanh(value_in) if key_in == "k" else value_in
+            for key_in, value_in in value_out.items()
+        }
+        for key_out, value_out in polynomial_parameters.items()
+    }
+
 def eval_polynomial(
     t: float,
     polynomial_parameters: dict,
