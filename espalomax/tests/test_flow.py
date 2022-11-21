@@ -106,14 +106,6 @@ def test_backward_training():
     molecule.generate_conformers()
     coordinate = molecule.conformers[0]._value * 0.1
     coordinate = jnp.array(coordinate)
-
-    from jax_md import simulate
-    temperature = 1.0
-    dt = 1e-3
-    init, update = simulate.nvt_nose_hoover(energy_fn, shift_fn, dt, temperature)
-    state = init(jax.random.PRNGKey(2666), coordinate)
-    update = jax.jit(update)
-
     parameters  = esp.graph.parameters_from_molecule(molecule)
 
     from jax_md import space
@@ -124,45 +116,55 @@ def test_backward_training():
         displacement_fn, default_mm_parameters=parameters,
     )
 
-    from diffrax import diffeqsolve, ODETerm, Dopri5
+    from jax_md import simulate
+    temperature = 1.0
+    dt = 1e-3
+    init, update = simulate.nvt_nose_hoover(energy_fn, shift_fn, dt, temperature)
+    md_state = init(jax.random.PRNGKey(2666), coordinate)
+    update = jax.jit(update)
 
-    def f(t, x, flow_params):
+    @jax.jit
+    def f(x, t, flow_params):
         ff_params = esp.flow.eval_polynomial(t, flow_params)
         f_esp = jax.vmap(jax.grad(esp.mm.get_energy, 1), (None, 0))(ff_params, x)
         return f_esp
 
-    term = ODETerm(f)
-    solver = Dopri5()
-
     def loss(nn_params, x):
         flow_params = model.apply(nn_params, graph)
         flow_params = esp.flow.constraint_polynomial_parameters(flow_params)
-        y = diffeqsolve(term, solver, args=flow_params, t0=1.0, t1=0.0,  dt0=0.1, y0=x, max_steps=1000).ys[-1]
-        return (y ** 2).mean()
+        # y = diffeqsolve(term, solver, args=flow_params, t0=jnp.array(1.0), t1=jnp.array(0.0),  dt0=jnp.array(0.1), y0=x, max_steps=1000).ys[-1]
+        y = odeint(f, x, jnp.array([0.0, 1.0]), flow_params, rtol=0.01, atol=0.01)[1]
+        loss = (y ** 2).mean()
+        jax.debug.print("{x}", x=loss)
+        return loss
+        
 
     def step(state, x):
-        grads = jax.grad(loss)(state.params, x)
-        state = state.apply_gradients(grads=grads)
+        loss(state.params, x)
+
+        # grads = jax.grad(loss)(state.params, x)
+        # state = state.apply_gradients(grads=grads)
         return state
 
-    def simulation_and_step(state):
+
+    @jax.jit
+    def simulation_and_step(md_state, nn_state):
         traj = []
-        for _ in range(100):
-            state = update(state)
-            traj.append(state.position)
-        traj = jnp.stack(traj)
-        state = step(state, traj)
-        return state
+        for _ in range(10):
+            md_state = update(md_state)
+            traj.append(md_state.position)
+        traj = jnp.stack(traj).astype(jnp.float32)
+        nn_state = step(nn_state, traj)
+        return md_state, nn_state
 
     import optax
     tx = optax.adamw(1e-5)
     from flax.training.train_state import TrainState
-    state = TrainState.create(apply_fn=model.apply, params=nn_params, tx=tx)
+    nn_state = TrainState.create(apply_fn=model.apply, params=nn_params, tx=tx)
     key = jax.random.PRNGKey(2666)
-    for _ in range(1000):
+    for _ in range(1000000):
         this_key, key = jax.random.split(key)
-        x = jax.random.normal(key, shape=(10, 8, 3))
-        state = simulation_and_step(state, x)
+        md_state, nn_state = simulation_and_step(md_state, nn_state)
 
 
 test_backward_training()
