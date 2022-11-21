@@ -123,27 +123,35 @@ def test_backward_training():
     md_state = init(jax.random.PRNGKey(2666), coordinate)
     update = jax.jit(update)
 
-    @jax.jit
     def f(x, t, flow_params):
         ff_params = esp.flow.eval_polynomial(t, flow_params)
         f_esp = jax.vmap(jax.grad(esp.mm.get_energy, 1), (None, 0))(ff_params, x)
         return f_esp
 
-    def loss(nn_params, x):
+    def dynamics_and_trace(x, t, flow_params, key):
+        dynamics = partial(f, flow_params=flow_params)
+        trace = partial(esp.flow.get_trace, fn=dynamics, key=key)
+        def fn(state, t):
+            x, _trace = state
+            return dynamics(x, t), trace(x, t, key)
+        return fn
+
+    def loss(nn_params, x, key):
         flow_params = model.apply(nn_params, graph)
         flow_params = esp.flow.constraint_polynomial_parameters(flow_params)
-        # y = diffeqsolve(term, solver, args=flow_params, t0=jnp.array(1.0), t1=jnp.array(0.0),  dt0=jnp.array(0.1), y0=x, max_steps=1000).ys[-1]
-        y = odeint(f, x, jnp.array([0.0, 1.0]), flow_params, rtol=0.01, atol=0.01)[1]
+        fn = partial(dynamics_and_trace, flow_params=flow_params, key=key)
+        trace0 = jnp.zeros(shape=x.shape[:-2])
+        y, logdet = odeint(fn, (x, trace0), jnp.array([0.0, 1.0]), flow_params, rtol=0.01, atol=0.01)
+        y, logdet = y[-1], logdet[-1]
         loss = (y ** 2).mean()
         jax.debug.print("{x}", x=loss)
         return loss
-        
+
 
     def step(state, x):
         loss(state.params, x)
-
-        # grads = jax.grad(loss)(state.params, x)
-        # state = state.apply_gradients(grads=grads)
+        grads = jax.grad(loss)(state.params, x)
+        state = state.apply_gradients(grads=grads)
         return state
 
 

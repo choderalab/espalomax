@@ -28,7 +28,7 @@ def constraint_polynomial_parameters(
 ):
     return {
         key_out: {
-            key_in: jax.nn.log_softmax(value_in) if key_in == "coefficients" else 
+            key_in: jax.nn.log_softmax(value_in) if key_in == "coefficients" else
                     jax.nn.tanh(value_in) if key_in == "k" else value_in
             for key_in, value_in in value_out.items()
         }
@@ -47,3 +47,12 @@ def eval_polynomial(
         }
         for key_out, value_out in polynomial_parameters.items()
     }
+
+def get_trace(fn, x, t, key):
+    _fn = lambda x: fn(x, t)
+    y, vjp_fun = jax.vjp(_fn, x)
+    key, subkey = jax.random.split(key)
+    u = jax.random.normal(subkey, y.shape)
+    trace = vjp_fun(u)[0] * u
+    trace = trace.sum(axis=(-1, -2))
+    return trace
